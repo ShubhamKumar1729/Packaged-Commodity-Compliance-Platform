@@ -5,6 +5,7 @@ import { ComplianceFindingsView } from '../components/compliance/ComplianceFindi
 import { OCRVisualizer } from '../components/scan/OCRVisualizer';
 import { FactsSheet } from '../components/compliance/FactsSheet';
 import { CVFindingsView } from '../components/compliance/CVFindingsView';
+import { FSSRFindingsView } from '../components/compliance/FSSRFindingsView';
 import { StatusBadge } from '../components/StatusBadge';
 
 interface ScanDetailViewProps {
@@ -17,7 +18,7 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
   const [loading, setLoading] = useState<boolean>(true);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'compliance' | 'facts' | 'cv' | 'ocr'>('compliance');
+  const [activeTab, setActiveTab] = useState<'compliance' | 'facts' | 'cv' | 'fssr' | 'ocr'>('compliance');
 
   const loadScan = async () => {
     try {
@@ -193,6 +194,16 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
             CV Measurements (Rules 7 &amp; 8)
           </button>
           <button
+            onClick={() => setActiveTab('fssr')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'fssr'
+                ? 'bg-gold-500 text-slate-950 shadow-sm font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-gov-800'
+            }`}
+          >
+            Ingredients &amp; FSSR 2020 ({scan.fssr_findings?.length || 0})
+          </button>
+          <button
             onClick={() => setActiveTab('ocr')}
             className={`px-4 py-2 rounded-lg font-semibold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'ocr'
@@ -222,6 +233,8 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
           <FactsSheet facts={scan.facts} />
         ) : activeTab === 'cv' && hasFacts ? (
           <CVFindingsView facts={scan.facts} />
+        ) : activeTab === 'fssr' ? (
+          <FSSRFindingsView findings={scan.fssr_findings || []} />
         ) : (
           <OCRVisualizer
             imageUrl={scan.image_url}

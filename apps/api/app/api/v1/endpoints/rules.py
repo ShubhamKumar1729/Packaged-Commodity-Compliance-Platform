@@ -19,6 +19,17 @@ def get_active_rules():
     """
     return rule_registry.get_active_rules()
 
+@router.get("/rules/fssr", response_model=List[Dict[str, Any]])
+def get_fssr_rules():
+    """
+    Returns the FSSR 2020 ingredient rule family.
+
+    Declared before /rules/{rule_id} so the static path is not shadowed.
+    """
+    from services.compliance.fssr_evaluator import fssr_evaluator
+
+    return fssr_evaluator.get_rules()
+
 @router.get("/rules/{rule_id}", response_model=LegalRule)
 def get_rule_by_id(rule_id: str):
     """

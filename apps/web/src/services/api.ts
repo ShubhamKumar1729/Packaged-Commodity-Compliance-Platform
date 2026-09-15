@@ -112,6 +112,24 @@ export const api = {
 
   getAnnotatedImageUrl(scanId: string) {
     return `${API_BASE}/scans/${scanId}/annotated-image`;
+  },
+
+  async getFssrRules() {
+    const res = await fetch(`${API_BASE}/rules/fssr`);
+    if (!res.ok) throw new Error('Failed to fetch FSSR 2020 rules');
+    return res.json();
+  },
+
+  async getScanFssrFindings(scanId: string) {
+    const res = await fetch(`${API_BASE}/scans/${scanId}/fssr-findings`);
+    if (!res.ok) throw new Error('Failed to fetch FSSR findings');
+    return res.json();
+  },
+
+  async getScanEvidence(scanId: string) {
+    const res = await fetch(`${API_BASE}/scans/${scanId}/evidence`);
+    if (!res.ok) throw new Error('Failed to fetch evidence bundle');
+    return res.json();
   }
 };
 

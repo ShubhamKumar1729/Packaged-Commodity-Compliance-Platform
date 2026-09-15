@@ -1,0 +1,69 @@
+{
+  "ruleset_version": "FSSR_2020_v1",
+  "rule_family": "FSSR_2020",
+  "title": "Food Safety and Standards (Labelling and Display) Regulations, 2020 — Ingredient Declarations",
+  "effective_date": "2020-12-01",
+  "last_amended": "2022-06-01",
+  "rules": [
+    {
+      "rule_id": "FSSR_2020_INGREDIENTS_LIST",
+      "rule_family": "FSSR_2020",
+      "source_rule": "Regulation 5(2)",
+      "category": "INGREDIENT_DECLARATION",
+      "title": "List of Ingredients",
+      "description": "Every pre-packaged food shall declare a list of ingredients under the heading 'Ingredients', except where the food is a single-ingredient food.",
+      "verification_type": "TEXT_PRESENCE",
+      "severity": "HIGH",
+      "required_fields": ["ingredients_list"],
+      "enabled": true
+    },
+    {
+      "rule_id": "FSSR_2020_INGREDIENTS_ORDER",
+      "rule_family": "FSSR_2020",
+      "source_rule": "Regulation 5(2)(a)",
+      "category": "INGREDIENT_DECLARATION",
+      "title": "Descending Order of Composition",
+      "description": "Ingredients shall be listed in descending order of their composition by weight or volume, as determined at the time of manufacture.",
+      "verification_type": "STRUCTURED_ORDER",
+      "severity": "MEDIUM",
+      "required_fields": ["ingredients_list", "ingredient_percentages"],
+      "enabled": true
+    },
+    {
+      "rule_id": "FSSR_2020_ALLERGEN_DECLARATION",
+      "rule_family": "FSSR_2020",
+      "source_rule": "Regulation 5(4)",
+      "category": "ALLERGEN_DECLARATION",
+      "title": "Declaration of Major Allergens",
+      "description": "Foods containing cereals with gluten, crustacea, milk, eggs, fish, peanuts, tree nuts, soybeans, or added sulphites (>=10 mg/kg) shall declare them.",
+      "verification_type": "ALLERGEN_PRESENCE",
+      "severity": "HIGH",
+      "required_fields": ["ingredients_list", "allergen_statement"],
+      "enabled": true
+    },
+    {
+      "rule_id": "FSSR_2020_ADDITIVES_INS",
+      "rule_family": "FSSR_2020",
+      "source_rule": "Regulation 5(2)(f)",
+      "category": "ADDITIVE_DECLARATION",
+      "title": "Food Additives and INS Numbering",
+      "description": "Food additives shall be declared by class name followed by the specific name or recognised International Numbering System (INS) number.",
+      "verification_type": "ADDITIVE_PRESENCE",
+      "severity": "MEDIUM",
+      "required_fields": ["additives"],
+      "enabled": true
+    },
+    {
+      "rule_id": "FSSR_2020_VEG_NONVEG_MARK",
+      "rule_family": "FSSR_2020",
+      "source_rule": "Regulation 5(1)(iii)",
+      "category": "SYMBOL_DECLARATION",
+      "title": "Vegetarian / Non-Vegetarian Symbol",
+      "description": "Every package shall bear a green filled circle in a green square (vegetarian) or a brown filled triangle in a brown square (non-vegetarian) on the principal display panel.",
+      "verification_type": "VISUAL_SYMBOL",
+      "severity": "HIGH",
+      "required_fields": ["veg_nonveg_mark"],
+      "enabled": true
+    }
+  ]
+}

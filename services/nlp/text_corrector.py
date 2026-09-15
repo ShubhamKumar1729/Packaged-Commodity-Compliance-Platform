@@ -115,10 +115,13 @@ class OCRTextCorrector:
         """
         Normalize whitespace in text.
         """
-        # Replace multiple spaces with single space
-        text = re.sub(r'\s+', ' ', text)
+        # Collapse runs of spaces/tabs, but PRESERVE line breaks: each OCR line is
+        # a separate declaration, and merging them lets one field's regex run on
+        # into the next line's text.
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'[ \t]*\r?\n[ \t]*', '\n', text)
         # Remove spaces before punctuation
-        text = re.sub(r'\s+([,.:;!?)])', r'\1', text)
+        text = re.sub(r'[ \t]+([,.:;!?)])', r'\1', text)
         # Remove spaces after opening brackets
         text = re.sub(r'([(])\s+', r'\1', text)
         return text.strip()

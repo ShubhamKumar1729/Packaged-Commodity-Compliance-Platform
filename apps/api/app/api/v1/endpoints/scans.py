@@ -137,6 +137,9 @@ def get_scan_details(scan_id: str, db: Session = Depends(get_db)):
         "facts": json.loads(scan.facts_json) if scan.facts_json else None,
         "findings": json.loads(scan.findings_json) if scan.findings_json else [],
         "summary": json.loads(scan.summary_json) if scan.summary_json else None,
+        # Additive: OCR+VLM evidence pipeline and FSSR 2020 rule family.
+        "evidence": json.loads(scan.evidence_json) if getattr(scan, "evidence_json", None) else None,
+        "fssr_findings": json.loads(scan.fssr_findings_json) if getattr(scan, "fssr_findings_json", None) else [],
         "created_at": scan.created_at.isoformat(),
         "completed_at": scan.completed_at.isoformat() if scan.completed_at else None
     }
@@ -164,9 +167,18 @@ def analyze_scan(scan_id: str, db: Session = Depends(get_db)):
             "ocr_result": ocr_result.model_dump(),
             "facts": facts.model_dump(),
             "findings": [f.model_dump() for f in findings],
-            "summary": summary.model_dump()
+            "summary": summary.model_dump(),
+            # Additive: evidence bundle + FSSR 2020 family results.
+            "evidence": json.loads(scan.evidence_json) if getattr(scan, "evidence_json", None) else None,
+            "fssr_findings": json.loads(scan.fssr_findings_json) if getattr(scan, "fssr_findings_json", None) else []
         }
+    except HTTPException:
+        raise
     except Exception as e:
+        from app.services.scan_service import OCRUnavailableError
+
+        if isinstance(e, OCRUnavailableError):
+            raise HTTPException(status_code=503, detail=str(e))
         raise HTTPException(status_code=500, detail=f"Analysis pipeline failed: {str(e)}")
 
 @router.post("/scans/{scan_id}/evaluate")
@@ -274,6 +286,40 @@ def get_scan_facts(scan_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Facts have not been extracted for this scan yet. Call /analyze first.")
 
     return json.loads(scan.facts_json)
+
+
+@router.get("/scans/{scan_id}/evidence")
+def get_scan_evidence(scan_id: str, db: Session = Depends(get_db)):
+    """
+    Fused OCR + VLM evidence bundle backing every compliance decision.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+
+    if not getattr(scan, "evidence_json", None):
+        raise HTTPException(
+            status_code=400,
+            detail="Evidence has not been generated for this scan yet. Call /analyze first.",
+        )
+
+    return json.loads(scan.evidence_json)
+
+
+@router.get("/scans/{scan_id}/fssr-findings")
+def get_scan_fssr_findings(scan_id: str, db: Session = Depends(get_db)):
+    """
+    FSSR 2020 ingredient rule family results (separate from PCR 2011 findings).
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+
+    return {
+        "scan_id": scan.id,
+        "rule_family": "FSSR_2020",
+        "findings": json.loads(scan.fssr_findings_json) if getattr(scan, "fssr_findings_json", None) else [],
+    }
 
 @router.get("/scans/{scan_id}/image")
 def get_scan_image(scan_id: str, db: Session = Depends(get_db)):

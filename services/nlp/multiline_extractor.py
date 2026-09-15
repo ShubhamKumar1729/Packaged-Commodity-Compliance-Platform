@@ -27,10 +27,17 @@ class MultilineExtractor:
         ]
 
         header_idx = None
+        inline_name = None
         for i, token in enumerate(tokens):
             for pattern in header_patterns:
-                if re.search(pattern, token.text, re.IGNORECASE):
+                m = re.search(pattern, token.text, re.IGNORECASE)
+                if m:
                     header_idx = i
+                    # The company name may sit on the SAME line as the header,
+                    # e.g. "Manufactured & Packed By: Himalayan Foods Pvt. Ltd."
+                    remainder = token.text[m.end():].strip(" :;-–—,.")
+                    if len(remainder) >= 3:
+                        inline_name = remainder
                     break
             if header_idx is not None:
                 break
@@ -41,11 +48,16 @@ class MultilineExtractor:
         # Extract next 3-5 tokens as potential manufacturer info
         info_tokens = tokens[header_idx + 1:min(header_idx + 6, len(tokens))]
 
-        if not info_tokens:
+        if not info_tokens and not inline_name:
             return None, None, None
 
-        # First token after header is usually company name
-        company_name = info_tokens[0].text.strip()
+        # Prefer a name declared inline with the header; otherwise the next token.
+        if inline_name:
+            company_name = inline_name
+        elif info_tokens:
+            company_name = info_tokens[0].text.strip()
+        else:
+            company_name = None
 
         # Combine remaining tokens as address
         address_parts = [t.text.strip() for t in info_tokens]

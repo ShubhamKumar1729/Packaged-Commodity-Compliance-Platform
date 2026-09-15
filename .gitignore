@@ -52,3 +52,14 @@ storage/reports/*
 .vscode/
 *.swp
 *.swo
+
+# Generated visual evidence overlays
+storage/annotated/*
+!storage/annotated/.gitkeep
+
+# Frontend build metadata
+apps/web/tsconfig.tsbuildinfo
+
+# Local virtualenv
+.venv/
+test_legal_metrology.db

@@ -173,8 +173,12 @@ class RegexFactExtractor:
         # 4. Rule 6(1)(d) - Dates (Mfg / Pkd / Expiry / Best Before)
         # -------------------------------------------------------------
         date_patterns = [
-            r"(?:Mfd|Mfg|Manufactured|Packed|Pkd|Date\s*of\s*(?:Pkg|Packaging)|Packaging|Month\s*(?:&|and)?\s*Year\s*of\s*Packaging)\s*[:\.\-]?\s*([01]?\d\s*/\s*(?:20)?\d{2,4})",
-            r"(?:Mfd|Mfg|Manufactured)\s*[:\.\-]?\s*([01]?\d[-/](?:20)?\d{2,4})",
+            # Allow an intervening "Date"/"Dt" token and flexible punctuation,
+            # e.g. "Mfd. Date: 08/2026", "Mfg Dt - 08-2026", "Packed On: 08/2026".
+            r"(?:Mfd|Mfg|Manufactured|Packed|Pkd|Date\s*of\s*(?:Pkg|Packaging)|Packaging|Month\s*(?:&|and)?\s*Year\s*of\s*Packaging)[\s\.\-:]*(?:Date|Dt|On)?[\s\.\-:]*([01]?\d\s*[/-]\s*(?:20)?\d{2,4})",
+            r"(?:Mfd|Mfg|Manufactured)[\s\.\-:]*(?:Date|Dt|On)?[\s\.\-:]*([01]?\d[-/](?:20)?\d{2,4})",
+            # Month-name forms: "Mfd. Date: AUG 2026"
+            r"(?:Mfd|Mfg|Manufactured|Packed|Pkd)[\s\.\-:]*(?:Date|Dt|On)?[\s\.\-:]*([a-zA-Z]{3,9}\s+(?:20)?\d{2,4})",
             r"(?:Month|Year)\s*[:\.\-]?\s*(?:of\s*)?(?:Packaging|Mfg)\s*[:\.\-]?\s*([01]?\d\s*/\s*\d{4})",
         ]
 
@@ -240,7 +244,10 @@ class RegexFactExtractor:
 
         # Country of Origin (handle OCR errors like "Countryot" -> "Country of")
         origin_patterns = [
-            r"(?:Country\s*of\s*Origin|Countryof\s*Origin|Countryot\s*Origin|Made\s*in)\s*[:\-]?\s*([a-zA-Z\s]+)",
+            # Stop at end-of-line so a following declaration is not absorbed.
+            # Restrict to a single line and stop at any delimiter, so a following
+            # declaration (e.g. "Consumer Care") is not absorbed into the value.
+            r"(?:Country\s*of\s*Origin|Countryof\s*Origin|Countryot\s*Origin|Made\s*in)[ \t]*[:\-]?[ \t]*([a-zA-Z][a-zA-Z \t]*[a-zA-Z]|[a-zA-Z])(?=[ \t]*(?:[|,.;:\n\r]|$))",
         ]
 
         for pattern in origin_patterns:

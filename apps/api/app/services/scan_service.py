@@ -12,13 +12,35 @@ from app.schemas.facts import ProductFacts
 from app.schemas.compliance import (
     ComplianceFinding, ComplianceStatus, ComplianceSummary, ApplicabilityResult
 )
-from services.ocr import get_ocr_engine
+from services.ocr import get_ocr_engine, get_ocr_engine_safe
 from services.nlp.regex_extractor import RegexFactExtractor
 from services.cv.measurements import cv_service
 from services.cv.annotator import visual_annotator
 from services.compliance.applicability import applicability_service
 from services.compliance.evaluator import legal_evaluator
 from services.compliance.scoring import scoring_service
+from services.compliance.fssr_evaluator import fssr_evaluator
+from services.fusion.data_fusion import data_fusion_service
+from services.vlm import get_vlm_provider
+from app.schemas.evidence import EvidenceBundle, OCREvidence
+
+
+class OCRUnavailableError(RuntimeError):
+    """The configured real OCR engine could not run; no text evidence exists."""
+
+
+def _run_real_ocr(image_bytes: bytes):
+    """
+    Execute the configured OCR engine. Returns (ocr_result, provider, error).
+    Never substitutes fabricated text.
+    """
+    engine, provider, err = get_ocr_engine_safe()
+    if engine is None:
+        raise OCRUnavailableError(
+            f"OCR engine '{provider}' is unavailable: {err}. "
+            "Install PaddleOCR model weights or set OCR_PROVIDER explicitly."
+        )
+    return engine.extract(image_bytes), provider, err
 
 class ScanService:
     @staticmethod
@@ -32,8 +54,7 @@ class ScanService:
         with open(scan.image_path, "rb") as f:
             image_bytes = f.read()
 
-        ocr_engine = get_ocr_engine()
-        ocr_result: OCRResult = ocr_engine.extract(image_bytes)
+        ocr_result, _provider, _err = _run_real_ocr(image_bytes)
 
         # 1. Extract structured facts from OCR tokens
         facts: ProductFacts = RegexFactExtractor.extract_facts(ocr_result)
@@ -62,15 +83,32 @@ class ScanService:
         with open(scan.image_path, "rb") as f:
             image_bytes = f.read()
 
-        # Step 1: OCR
-        ocr_engine = get_ocr_engine()
-        ocr_result: OCRResult = ocr_engine.extract(image_bytes)
+        # Step 1: OCR (real text extraction — PaddleOCR by default)
+        ocr_result, ocr_provider, ocr_error = _run_real_ocr(image_bytes)
 
         # Step 2: Extract Facts
         facts: ProductFacts = RegexFactExtractor.extract_facts(ocr_result)
 
         # Step 3: Computer Vision Measurements
         cv_findings = cv_service.run_full_pipeline(image_bytes, ocr_result, facts)
+
+        # Step 3b: VLM visual analysis (complements OCR, never replaces it)
+        try:
+            vlm_evidence = get_vlm_provider().analyze(image_bytes, ocr_result.full_text)
+        except Exception as exc:
+            from app.schemas.evidence import VLMEvidence
+            vlm_evidence = VLMEvidence(available=False, error=str(exc))
+
+        # Step 3c: Data fusion -> structured evidence bundle for the rule engines
+        evidence_bundle: EvidenceBundle = data_fusion_service.build(
+            ocr_result=ocr_result,
+            facts=facts,
+            vlm_evidence=vlm_evidence,
+            cv_findings=cv_findings,
+            scan_id=scan.id,
+            ocr_provider=ocr_provider,
+            ocr_error=ocr_error,
+        )
 
         # Step 4: Statutory Applicability (Rule 3 & Rule 26)
         applicability: ApplicabilityResult = applicability_service.evaluate_applicability(
@@ -87,7 +125,14 @@ class ScanService:
             commodity_type=scan.commodity_type
         )
 
-        # Step 6: Scoring & Overall Verdict
+        # Step 5b: FSSR 2020 ingredient rule family (separate from PCR 2011)
+        try:
+            fssr_results = fssr_evaluator.evaluate(evidence_bundle, scan.commodity_type)
+        except Exception as exc:
+            fssr_results = []
+            print(f"[FSSR] evaluation failed: {exc}")
+
+        # Step 6: Scoring & Overall Verdict (PCR 2011 only — unchanged behaviour)
         summary: ComplianceSummary = scoring_service.calculate_summary(
             scan_id=scan.id,
             findings=findings,
@@ -119,6 +164,19 @@ class ScanService:
         scan.compliance_score = summary.compliance_score
         scan.status = "COMPLETED"
         scan.completed_at = now
+
+        # Persist the new evidence pipeline output (additive columns).
+        try:
+            scan.evidence_json = json.dumps(
+                {
+                    "ocr": evidence_bundle.ocr.model_dump(),
+                    "vlm": evidence_bundle.vlm.model_dump(),
+                    "fields": {k: v.model_dump() for k, v in evidence_bundle.fields.items()},
+                }
+            )
+            scan.fssr_findings_json = json.dumps([r.model_dump() for r in fssr_results])
+        except Exception as exc:
+            print(f"[Evidence] persistence skipped: {exc}")
 
         db.commit()
         db.refresh(scan)

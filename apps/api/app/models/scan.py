@@ -22,6 +22,11 @@ class Scan(Base):
     facts_json = Column(Text, nullable=True)
     findings_json = Column(Text, nullable=True)
     summary_json = Column(Text, nullable=True)
+
+    # Additive columns for the OCR+VLM evidence pipeline and FSSR 2020 family.
+    # Nullable so existing rows and API consumers are unaffected.
+    evidence_json = Column(Text, nullable=True)
+    fssr_findings_json = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     
     # Authoritative Legal Metrology Rules Paths
     LEGAL_RULES_PATH: Path = REPO_ROOT / "data" / "legal" / "rules.json"
+    FSSR_RULES_PATH: Path = REPO_ROOT / "data" / "legal" / "fssr_rules.json"
     COMMODITIES_PATH: Path = REPO_ROOT / "data" / "legal" / "commodities.json"
     EXEMPTIONS_PATH: Path = REPO_ROOT / "data" / "legal" / "exemptions.json"
     
@@ -39,8 +40,19 @@ class Settings(BaseSettings):
         "*"
     ]
     
-    # OCR Provider: "easyocr", "mock", "paddle", or "tesseract"
-    OCR_PROVIDER: str = "easyocr"
+    # OCR Provider: "paddleocr" (default, real OCR), "easyocr", or "mock" (tests/CI only)
+    OCR_PROVIDER: str = "paddleocr"
+
+    # PaddleOCR tuning (CPU-only by default)
+    PADDLE_OCR_LANG: str = "en"
+    PADDLE_USE_TEXTLINE_ORIENTATION: bool = True
+
+    # VLM Provider: "heuristic" (local OpenCV visual analyser) or "none"
+    VLM_PROVIDER: str = "heuristic"
+
+    # When True, an unavailable real OCR engine silently falls back to the mock
+    # engine. Must stay False in production: fabricated text is never acceptable.
+    OCR_ALLOW_MOCK_FALLBACK: bool = False
 
     model_config = {
         "env_file": ".env",
