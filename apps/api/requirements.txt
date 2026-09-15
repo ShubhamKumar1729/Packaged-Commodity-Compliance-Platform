@@ -15,5 +15,12 @@ pytest>=8.0.0
 pytest-asyncio>=0.24.0
 
 # Real OCR engine (PaddleOCR, CPU). Model weights download on first use.
+#
+# paddlepaddle 3.x's oneDNN CPU backend cannot execute the PP-OCRv6 detection
+# graph and aborts inference with:
+#   NotImplementedError: ConvertPirAttribute2RuntimeAttribute not support
+#   [pir::ArrayAttribute<pir::DoubleAttribute>]
+# services/ocr/paddle_ocr_engine.py works around this by disabling oneDNN
+# (FLAGS_use_mkldnn=0) before paddle initialises, so newer builds are usable.
 paddlepaddle>=3.0.0
 paddleocr>=3.0.0

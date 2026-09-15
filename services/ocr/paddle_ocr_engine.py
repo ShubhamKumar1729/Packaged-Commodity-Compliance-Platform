@@ -61,6 +61,10 @@ class PaddleOCREngine(BaseOCRProvider):
         self.det_limit_side_len = det_limit_side_len
         self._ocr = None
         self._lock = threading.Lock()
+        # Separate lock: the availability probe calls _get_ocr(), which takes
+        # _lock, and threading.Lock is not reentrant.
+        self._avail_lock = threading.Lock()
+        self._available: Optional[bool] = None
 
     # ------------------------------------------------------------------
     # Engine lifecycle
@@ -125,21 +129,34 @@ class PaddleOCREngine(BaseOCRProvider):
         Constructing the pipeline is not sufficient: paddlepaddle's oneDNN CPU
         backend only fails once a graph is executed. So run one tiny inference
         and treat a crash as unavailable.
-        """
-        try:
-            self._get_ocr()
-        except Exception as exc:
-            logger.warning("PaddleOCR unavailable: %s", exc)
-            return False
 
-        try:
-            probe = np.full((64, 160, 3), 255, dtype=np.uint8)
-            cv2.putText(probe, "AB12", (8, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 3)
-            self._run(probe)
-            return True
-        except Exception as exc:
-            logger.warning("PaddleOCR loaded but inference failed: %s", exc)
-            return False
+        The result is cached: this runs on every scan, and a real inference is
+        far too expensive to repeat as a health check.
+        """
+        if self._available is not None:
+            return self._available
+
+        with self._avail_lock:
+            if self._available is not None:
+                return self._available
+
+            try:
+                self._get_ocr()
+            except Exception as exc:
+                logger.warning("PaddleOCR unavailable: %s", exc)
+                self._available = False
+                return False
+
+            try:
+                probe = np.full((64, 160, 3), 255, dtype=np.uint8)
+                cv2.putText(probe, "AB12", (8, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 3)
+                self._run(probe)
+                self._available = True
+            except Exception as exc:
+                logger.warning("PaddleOCR loaded but inference failed: %s", exc)
+                self._available = False
+
+            return self._available
 
     # ------------------------------------------------------------------
     # Inference
