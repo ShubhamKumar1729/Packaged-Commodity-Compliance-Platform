@@ -1,158 +1,178 @@
 import React from 'react';
 import { ProductFacts, FactValue } from '../../types';
-import { Tag, Calendar, MapPin, Phone, Globe, Scale, DollarSign, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  Tag, Calendar, MapPin, Phone, Globe, Scale, IndianRupee, Building2,
+} from 'lucide-react';
+import { clsx } from 'clsx';
+import { Panel, PanelHeader, StatusPill, Badge } from '../ui';
 
 interface FactsSheetProps {
   facts: ProductFacts;
 }
 
+interface FactRow {
+  rule: string;
+  label: string;
+  fact?: FactValue;
+  icon: React.ElementType;
+  note?: string;
+}
+
+const displayValue = (fact: FactValue): string => {
+  const normalized = fact.normalized_value;
+  if (typeof normalized === 'object' && normalized !== null) return JSON.stringify(normalized);
+  return String(normalized ?? fact.raw_value ?? '');
+};
+
+/**
+ * Extracted declarations shown as a scannable table rather than a wall of
+ * cards — each row is rule, value, source text and extraction confidence.
+ */
 export const FactsSheet: React.FC<FactsSheetProps> = ({ facts }) => {
-  const renderFactCard = (
-    title: string,
-    fact?: FactValue,
-    icon?: React.ReactNode,
-    extraInfo?: string
-  ) => {
-    const isPresent = !!fact?.raw_value || !!fact?.normalized_value;
+  const rows: FactRow[] = [
+    {
+      rule: 'Rule 6(1)(e)',
+      label: 'Maximum retail price',
+      fact: facts.mrp_value,
+      icon: IndianRupee,
+      note: facts.inclusive_of_taxes_clause
+        ? 'Inclusive-of-all-taxes clause present'
+        : 'Inclusive-of-all-taxes clause not detected',
+    },
+    {
+      rule: 'Rule 6(1)(c)',
+      label: 'Net quantity',
+      fact: facts.net_quantity_value,
+      icon: Scale,
+      note: facts.net_quantity_unit?.raw_value
+        ? `Declared unit “${facts.net_quantity_unit.raw_value}” · normalised to ${facts.net_quantity_value?.normalized_value} ${facts.net_quantity_unit?.normalized_value}`
+        : undefined,
+    },
+    { rule: 'Rule 6(1)(da)', label: 'Unit sale price', fact: facts.unit_sale_price, icon: Tag },
+    { rule: 'Rule 6(1)(b)', label: 'Generic or common name', fact: facts.generic_name, icon: Tag },
+    {
+      rule: 'Rule 6(1)(d)',
+      label: 'Date of manufacture / packing',
+      fact: facts.mfg_date,
+      icon: Calendar,
+      note: facts.best_before?.raw_value
+        ? `Best before: ${facts.best_before.raw_value}`
+        : undefined,
+    },
+    { rule: 'Rule 6(1)(a)', label: 'Country of origin', fact: facts.country_of_origin, icon: Globe },
+    {
+      rule: 'Rule 6(1)(a)',
+      label: 'Manufacturer or packer',
+      fact: facts.manufacturer_name,
+      icon: Building2,
+    },
+    {
+      rule: 'Rule 6(1)(a)',
+      label: 'Address & pincode',
+      fact: facts.manufacturer_address,
+      icon: MapPin,
+    },
+    {
+      rule: 'Rule 6(1)(n)',
+      label: 'Consumer care',
+      fact: facts.consumer_care_phone || facts.consumer_care_email,
+      icon: Phone,
+      note:
+        [
+          facts.consumer_care_phone?.normalized_value
+            ? `Tel: ${facts.consumer_care_phone.normalized_value}`
+            : null,
+          facts.consumer_care_email?.normalized_value
+            ? `Email: ${facts.consumer_care_email.normalized_value}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || undefined,
+    },
+  ];
 
-    return (
-      <div className={`p-4 rounded-xl border transition-all ${
-        isPresent
-          ? 'bg-gov-850/80 border-slate-700/80 hover:border-gold-500/40'
-          : 'bg-gov-900/40 border-slate-800/60 opacity-75'
-      }`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            {icon}
-            <span>{title}</span>
-          </div>
-          {isPresent ? (
-            <span className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>{(fact!.confidence * 100).toFixed(0)}%</span>
-            </span>
-          ) : (
-            <span className="flex items-center space-x-1 text-[11px] font-mono text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-              <XCircle className="w-3 h-3" />
-              <span>Missing</span>
-            </span>
-          )}
-        </div>
-
-        <div className="mt-2.5">
-          {isPresent ? (
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-white break-words">
-                {typeof fact!.normalized_value === 'object' && fact!.normalized_value !== null
-                  ? JSON.stringify(fact!.normalized_value)
-                  : String(fact!.normalized_value ?? fact!.raw_value)}
-              </p>
-              {fact!.raw_value && fact!.raw_value !== String(fact!.normalized_value) && (
-                <p className="text-[11px] text-slate-400 font-mono">
-                  Raw: &ldquo;{fact!.raw_value}&rdquo;
-                </p>
-              )}
-              {extraInfo && (
-                <p className="text-[11px] text-gold-400/90 font-medium">{extraInfo}</p>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic">No declaration detected in scan</p>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const detectedCount = rows.filter(
+    (r) => !!r.fact?.raw_value || !!r.fact?.normalized_value,
+  ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div>
-          <h2 className="text-base font-bold text-white">Structured Declarations Fact Sheet</h2>
-          <p className="text-xs text-slate-400">
-            Normalized statutory attributes extracted from OCR tokens under Legal Metrology Rules, 2011.
-          </p>
-        </div>
-        <span className="text-xs px-2.5 py-1 rounded bg-gov-800 text-gold-400 border border-gold-500/20 font-mono">
-          Rule 6 Fact Matrix
-        </span>
-      </div>
+    <Panel className="overflow-hidden">
+      <PanelHeader
+        title="Extracted declarations"
+        description="Normalised statutory attributes read from the label by OCR."
+        actions={
+          <Badge mono>
+            {detectedCount}/{rows.length} detected
+          </Badge>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Maximum Retail Price (MRP) */}
-        {renderFactCard(
-          'Rule 6(1)(e) - MRP',
-          facts.mrp_value,
-          <DollarSign className="w-4 h-4 text-emerald-400" />,
-          facts.inclusive_of_taxes_clause
-            ? '✓ Inclusive of all taxes confirmed'
-            : '⚠️ Tax inclusion clause missing'
-        )}
+      <ul className="divide-y divide-slate-800">
+        {rows.map((row) => {
+          const present = !!row.fact?.raw_value || !!row.fact?.normalized_value;
+          const Icon = row.icon;
+          const value = present ? displayValue(row.fact!) : null;
+          const rawDiffers =
+            present && row.fact!.raw_value && row.fact!.raw_value !== value;
 
-        {/* Net Quantity & Units */}
-        {renderFactCard(
-          'Rule 6(1)(c) - Net Quantity',
-          facts.net_quantity_value,
-          <Scale className="w-4 h-4 text-sky-400" />,
-          facts.net_quantity_unit?.raw_value
-            ? `Declared Unit: ${facts.net_quantity_unit.raw_value} (Normalized: ${facts.net_quantity_value?.normalized_value} ${facts.net_quantity_unit?.normalized_value})`
-            : undefined
-        )}
+          return (
+            <li
+              key={`${row.rule}-${row.label}`}
+              className={clsx(
+                'px-5 py-3.5 flex items-start gap-4',
+                !present && 'bg-gov-900/40',
+              )}
+            >
+              <Icon
+                className={clsx(
+                  'w-4 h-4 mt-0.5 shrink-0',
+                  present ? 'text-slate-500' : 'text-slate-600',
+                )}
+                aria-hidden="true"
+              />
 
-        {/* Unit Sale Price (USP) */}
-        {renderFactCard(
-          'Rule 6(1)(da) - Unit Sale Price',
-          facts.unit_sale_price,
-          <Tag className="w-4 h-4 text-amber-400" />
-        )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-2xs font-mono text-slate-500">{row.rule}</span>
+                  <span className="text-2xs font-medium uppercase tracking-wide text-slate-500">
+                    {row.label}
+                  </span>
+                </div>
 
-        {/* Generic or Common Name */}
-        {renderFactCard(
-          'Rule 6(1)(b) - Generic Name',
-          facts.generic_name,
-          <Tag className="w-4 h-4 text-purple-400" />
-        )}
+                {present ? (
+                  <>
+                    <p className="mt-1 text-sm font-medium text-slate-100 break-words">{value}</p>
+                    {rawDiffers && (
+                      <p className="mt-0.5 text-2xs text-slate-500 font-mono break-words">
+                        Raw: “{row.fact!.raw_value}”
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">Not detected on this label</p>
+                )}
 
-        {/* Dates */}
-        {renderFactCard(
-          'Rule 6(1)(d) - Mfg / Pkd Date',
-          facts.mfg_date,
-          <Calendar className="w-4 h-4 text-blue-400" />,
-          facts.best_before?.raw_value ? facts.best_before.raw_value : undefined
-        )}
+                {row.note && (
+                  <p className="mt-1 text-2xs text-slate-500 leading-relaxed">{row.note}</p>
+                )}
+              </div>
 
-        {/* Country of Origin */}
-        {renderFactCard(
-          'Rule 6(1)(a) - Country of Origin',
-          facts.country_of_origin,
-          <Globe className="w-4 h-4 text-teal-400" />
-        )}
-
-        {/* Manufacturer Name */}
-        {renderFactCard(
-          'Rule 6(1)(a) - Manufacturer / Packer',
-          facts.manufacturer_name,
-          <MapPin className="w-4 h-4 text-rose-400" />
-        )}
-
-        {/* Manufacturer Address */}
-        {renderFactCard(
-          'Rule 6(1)(a) - Address & Pincode',
-          facts.manufacturer_address,
-          <MapPin className="w-4 h-4 text-rose-400" />
-        )}
-
-        {/* Consumer Care Contacts */}
-        {renderFactCard(
-          'Rule 6(1)(n) - Consumer Care',
-          facts.consumer_care_phone || facts.consumer_care_email,
-          <Phone className="w-4 h-4 text-indigo-400" />,
-          [
-            facts.consumer_care_phone?.normalized_value ? `Tel: ${facts.consumer_care_phone.normalized_value}` : null,
-            facts.consumer_care_email?.normalized_value ? `Email: ${facts.consumer_care_email.normalized_value}` : null,
-          ].filter(Boolean).join(' • ')
-        )}
-      </div>
-    </div>
+              <div className="shrink-0 text-right">
+                {present ? (
+                  <>
+                    <StatusPill kind="pass" label="Detected" size="sm" />
+                    <p className="mt-1 text-2xs font-mono tabular-nums text-slate-500">
+                      {(row.fact!.confidence * 100).toFixed(0)}% conf.
+                    </p>
+                  </>
+                ) : (
+                  <StatusPill kind="warn" label="Missing" size="sm" />
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
   );
 };

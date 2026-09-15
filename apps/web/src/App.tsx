@@ -6,9 +6,9 @@ import { RulesView } from './pages/RulesView';
 import { HistoryView } from './pages/HistoryView';
 import { ScanDetailView } from './pages/ScanDetailView';
 import { api } from './services/api';
-import { Scale } from 'lucide-react';
+import { ThemeProvider } from './theme/ThemeProvider';
 
-export const App: React.FC = () => {
+const AppShell: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [systemReady, setSystemReady] = useState<boolean>(false);
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
@@ -46,15 +46,23 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gov-900 text-slate-100 flex flex-col font-sans">
-      {/* Top Navigation */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-gold-500 focus:text-white dark:focus:text-gov-950 focus:text-sm"
+      >
+        Skip to content
+      </a>
+
       <Navbar
         activeTab={activeTab}
         setActiveTab={handleTabChange}
         systemReady={systemReady}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main
+        id="main-content"
+        className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-7"
+      >
         {selectedScanId ? (
           <ScanDetailView
             scanId={selectedScanId}
@@ -81,22 +89,24 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-gov-900 py-6 mt-12 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <Scale className="w-4 h-4 text-gold-500/80" />
-            <span className="text-slate-400 font-medium">
-              Legal Metrology (Packaged Commodities) Rules, 2011 Compliance Platform
-            </span>
-          </div>
-          <p className="text-slate-500 text-[11px]">
-            AI extracts &amp; measures • Deterministic rules decide compliance • Government of India
+      <footer className="border-t border-slate-800 mt-6">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="text-2xs text-slate-500">
+            PackSure — Legal Metrology (Packaged Commodities) Rules, 2011 &amp; FSSR 2020
+          </p>
+          <p className="text-2xs text-slate-500">
+            AI extracts and measures. Deterministic rules decide compliance.
           </p>
         </div>
       </footer>
     </div>
   );
 };
+
+export const App: React.FC = () => (
+  <ThemeProvider>
+    <AppShell />
+  </ThemeProvider>
+);
 
 export default App;

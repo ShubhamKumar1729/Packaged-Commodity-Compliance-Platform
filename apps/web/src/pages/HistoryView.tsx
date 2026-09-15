@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { History, Search, Filter, ArrowUpRight, Scale } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Search, ChevronRight, Inbox, SearchX } from 'lucide-react';
 import { api } from '../services/api';
 import { ScanItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import {
+  Panel, Table, Th, Td, EmptyState, TableSkeleton, Select, Badge, Meter,
+} from '../components/ui';
+import { formatDateTime, humanise, scoreTone } from '../lib/verdict';
 
 interface HistoryViewProps {
   onViewScan: (scanId: string) => void;
@@ -28,114 +32,162 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onViewScan }) => {
     loadScans();
   }, []);
 
-  const filteredScans = scans.filter((s) => {
-    const matchesSearch = s.scan_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          s.commodity_type.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesVerdict = verdictFilter === 'ALL' ? true : s.overall_verdict === verdictFilter;
-    return matchesSearch && matchesVerdict;
-  });
+  // Filtering logic preserved exactly.
+  const filteredScans = useMemo(
+    () =>
+      scans.filter((s) => {
+        const matchesSearch =
+          s.scan_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          s.commodity_type.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesVerdict = verdictFilter === 'ALL' ? true : s.overall_verdict === verdictFilter;
+        return matchesSearch && matchesVerdict;
+      }),
+    [scans, searchQuery, verdictFilter],
+  );
+
+  const isFiltered = searchQuery.trim() !== '' || verdictFilter !== 'ALL';
 
   return (
-    <div className="space-y-6">
-      {/* Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center space-x-2">
-            <History className="w-6 h-6 text-sky-400" />
-            <h1 className="text-2xl font-bold text-white tracking-tight">Inspection Ledger & History</h1>
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-100 tracking-tight">Inspection history</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          Audit log of every packaged commodity scan and its compliance assessment.
+        </p>
+      </div>
+
+      <Panel className="overflow-hidden">
+        {/* Toolbar */}
+        <div className="px-4 py-3 border-b border-slate-800 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+          <div className="relative w-full sm:max-w-xs">
+            <Search
+              className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              id="history-search"
+              type="search"
+              placeholder="Search scan number or commodity"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search inspections"
+              className="w-full h-9 pl-9 pr-3 bg-gov-900 border border-slate-700 rounded-md text-sm text-slate-100 placeholder:text-slate-500 hover:border-slate-600 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/25 transition-colors"
+            />
           </div>
-          <p className="text-sm text-slate-300 mt-1">
-            Complete immutable audit log of packaged commodity scans and compliance assessments.
-          </p>
-        </div>
-      </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center glass-panel p-4 rounded-xl">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Search by Scan Number or Commodity..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-gov-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-gold-500 transition-all"
-          />
+          <div className="flex items-center gap-2.5">
+            <label htmlFor="verdict-filter" className="text-xs text-slate-400 whitespace-nowrap">
+              Result
+            </label>
+            <Select
+              id="verdict-filter"
+              value={verdictFilter}
+              onChange={(e) => setVerdictFilter(e.target.value)}
+              className="w-auto min-w-[10rem]"
+            >
+              <option value="ALL">All results</option>
+              <option value="PASS">Compliant</option>
+              <option value="FAIL">Violation</option>
+              <option value="REVIEW_REQUIRED">Needs verification</option>
+            </Select>
+            {!loading && (
+              <Badge mono className="hidden sm:inline-flex">
+                {filteredScans.length}
+              </Badge>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <select
-            value={verdictFilter}
-            onChange={(e) => setVerdictFilter(e.target.value)}
-            className="bg-gov-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-gold-500"
-          >
-            <option value="ALL">All Verdicts</option>
-            <option value="PASS">Compliant (PASS)</option>
-            <option value="FAIL">Non-Compliant (FAIL)</option>
-            <option value="REVIEW_REQUIRED">Review Required</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Scans Table */}
-      <div className="glass-panel rounded-xl overflow-hidden border border-slate-700/60">
         {loading ? (
-          <div className="p-12 text-center text-slate-400">Loading inspection ledger...</div>
+          <TableSkeleton rows={6} cols={5} />
+        ) : scans.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title="No inspections recorded"
+            description="Once you scan a packaged commodity it will appear here with its full compliance history."
+          />
         ) : filteredScans.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <Scale className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="text-sm font-semibold text-slate-300">No matching scan records found.</p>
-          </div>
+          <EmptyState
+            icon={SearchX}
+            title="No matching inspections"
+            description={
+              isFiltered
+                ? 'Try a different search term or clear the result filter.'
+                : undefined
+            }
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-gov-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700/80">
-                <tr>
-                  <th className="px-6 py-3">Scan Number</th>
-                  <th className="px-6 py-3">Commodity</th>
-                  <th className="px-6 py-3">Verdict</th>
-                  <th className="px-6 py-3">Score</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3">Timestamp</th>
-                  <th className="px-6 py-3 text-right">Action</th>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Scan</Th>
+                <Th className="hidden md:table-cell">Commodity</Th>
+                <Th>Result</Th>
+                <Th className="hidden lg:table-cell">Score</Th>
+                <Th className="hidden sm:table-cell">Stage</Th>
+                <Th className="hidden xl:table-cell">Submitted</Th>
+                <Th align="right" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {filteredScans.map((s) => (
+                <tr
+                  key={s.id}
+                  onClick={() => onViewScan(s.id)}
+                  className="hover:bg-gov-800/50 transition-colors cursor-pointer"
+                >
+                  <Td>
+                    <span className="font-mono text-xs text-slate-200">{s.scan_number}</span>
+                    <span className="block md:hidden text-2xs text-slate-500 mt-0.5">
+                      {humanise(s.commodity_type)}
+                    </span>
+                  </Td>
+                  <Td className="hidden md:table-cell text-xs text-slate-400">
+                    {humanise(s.commodity_type)}
+                  </Td>
+                  <Td>
+                    <StatusBadge status={s.overall_verdict || s.status} size="sm" />
+                  </Td>
+                  <Td className="hidden lg:table-cell">
+                    {s.compliance_score != null ? (
+                      <div className="w-24">
+                        <div className="flex items-center justify-between text-2xs text-slate-400 mb-1">
+                          <span className="font-mono tabular-nums text-slate-300">
+                            {s.compliance_score.toFixed(0)}%
+                          </span>
+                        </div>
+                        <Meter
+                          value={s.compliance_score}
+                          tone={scoreTone(s.overall_verdict)}
+                          label={`Score for ${s.scan_number}`}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-600">—</span>
+                    )}
+                  </Td>
+                  <Td className="hidden sm:table-cell">
+                    <span className="text-2xs font-mono text-slate-500">{humanise(s.status)}</span>
+                  </Td>
+                  <Td className="hidden xl:table-cell text-xs text-slate-500 whitespace-nowrap">
+                    {formatDateTime(s.created_at)}
+                  </Td>
+                  <Td align="right">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onViewScan(s.id); }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-gold-400 hover:text-gold-300"
+                      aria-label={`Inspect ${s.scan_number}`}
+                    >
+                      Inspect
+                      <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </Td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {filteredScans.map((s) => (
-                  <tr key={s.id} className="hover:bg-gov-800/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs font-medium text-gold-300">{s.scan_number}</td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-200">{s.commodity_type}</td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={s.overall_verdict} size="sm" />
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">
-                      {s.compliance_score != null ? `${s.compliance_score}%` : '-'}
-                    </td>
-                    <td className="px-6 py-4 text-xs">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">
-                      {new Date(s.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => onViewScan(s.id)}
-                        className="text-xs text-gold-400 hover:text-gold-300 font-semibold underline inline-flex items-center space-x-1"
-                      >
-                        <span>Inspect</span>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </Table>
         )}
-      </div>
+      </Panel>
     </div>
   );
 };

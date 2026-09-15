@@ -1,13 +1,60 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, AlertOctagon, HelpCircle, FileText, ArrowUpRight, Scale, CheckCircle2 } from 'lucide-react';
+import {
+  ScanLine, FileText, ShieldCheck, AlertOctagon, HelpCircle,
+  Inbox, ChevronRight,
+} from 'lucide-react';
 import { api } from '../services/api';
 import { DashboardSummary, ScanItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import {
+  Panel, PanelHeader, Button, EmptyState, Skeleton, TableSkeleton,
+  Meter, Table, Th, Td, Badge,
+} from '../components/ui';
+import { formatDateTime, humanise } from '../lib/verdict';
 
 interface DashboardViewProps {
   onStartNewScan: () => void;
   onViewScan: (scanId: string) => void;
 }
+
+const StatTile: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  hint: string;
+  icon: React.ElementType;
+  tone?: 'neutral' | 'pass' | 'fail' | 'warn';
+  loading?: boolean;
+}> = ({ label, value, hint, icon: Icon, tone = 'neutral', loading }) => {
+  const valueTone = {
+    neutral: 'text-slate-100',
+    pass: 'text-emerald-400',
+    fail: 'text-rose-400',
+    warn: 'text-amber-400',
+  }[tone];
+  const iconTone = {
+    neutral: 'text-slate-500',
+    pass: 'text-emerald-500',
+    fail: 'text-rose-500',
+    warn: 'text-amber-500',
+  }[tone];
+
+  return (
+    <div className="bg-gov-850 border border-slate-800 rounded-lg p-4">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-2xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
+        <Icon className={`w-4 h-4 ${iconTone}`} aria-hidden="true" />
+      </div>
+      {loading ? (
+        <Skeleton className="h-8 w-14 mt-2.5" />
+      ) : (
+        <p className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${valueTone}`}>
+          {value}
+        </p>
+      )}
+      <p className="mt-1 text-2xs text-slate-500 leading-relaxed">{hint}</p>
+    </div>
+  );
+};
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onStartNewScan, onViewScan }) => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -32,163 +79,200 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onStartNewScan, on
     loadData();
   }, []);
 
+  const recent = scans.slice(0, 8);
+  const rate = summary?.compliance_rate_percent ?? 0;
+
   return (
-    <div className="space-y-8">
-      {/* Hero / Header Notice */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-gov-800 via-gov-700 to-gov-850 p-6 md:p-8 border border-gold-500/20 shadow-xl">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-gold-500/10 text-gold-400 text-xs font-semibold uppercase tracking-wider mb-2 border border-gold-500/20">
-              <Scale className="w-3.5 h-3.5" />
-              <span>Statutory Compliance Monitor</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-              Legal Metrology Enforcement Command
-            </h1>
-            <p className="mt-1 text-sm md:text-base text-slate-300 max-w-2xl">
-              Automated examination of packaged commodities under Legal Metrology (Packaged Commodities) Rules, 2011.
-              Rule-driven legal reasoning with verifiable visual evidence.
-            </p>
-          </div>
-          <button
-            onClick={onStartNewScan}
-            className="self-start md:self-auto px-5 py-2.5 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 text-slate-950 font-bold text-sm rounded-lg shadow-md hover:shadow-gold-500/20 transition-all flex items-center space-x-2"
-          >
-            <span>Scan New Package</span>
-            <ArrowUpRight className="w-4 h-4" />
-          </button>
+    <div className="space-y-6">
+      {/* Page header + primary action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-100 tracking-tight">
+            Compliance overview
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Verification of packaged commodities under PCR 2011 and FSSR 2020.
+          </p>
         </div>
+        <Button variant="primary" size="lg" icon={ScanLine} onClick={onStartNewScan}>
+          Scan product
+        </Button>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Total Inspections */}
-        <div className="glass-panel rounded-xl p-5 border border-slate-700/50">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Inspections</span>
-            <FileText className="w-5 h-5 text-sky-400" />
-          </div>
-          <p className="mt-3 text-3xl font-extrabold text-white font-mono">
-            {loading ? '-' : summary?.total_scans ?? 0}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Total registered package scans</p>
-        </div>
-
-        {/* Compliant (Pass) */}
-        <div className="glass-panel rounded-xl p-5 border border-emerald-500/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Compliant (Pass)</span>
-            <ShieldCheck className="w-5 h-5 text-emerald-400" />
-          </div>
-          <p className="mt-3 text-3xl font-extrabold text-emerald-400 font-mono">
-            {loading ? '-' : summary?.pass_count ?? 0}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">All mandatory declarations verified</p>
-        </div>
-
-        {/* Non-Compliant (Violations) */}
-        <div className="glass-panel rounded-xl p-5 border border-rose-500/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider">Violations Detected</span>
-            <AlertOctagon className="w-5 h-5 text-rose-400" />
-          </div>
-          <p className="mt-3 text-3xl font-extrabold text-rose-400 font-mono">
-            {loading ? '-' : summary?.fail_count ?? 0}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Contraventions under PCR, 2011</p>
-        </div>
-
-        {/* Review Required */}
-        <div className="glass-panel rounded-xl p-5 border border-amber-500/20">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Review Required</span>
-            <HelpCircle className="w-5 h-5 text-amber-400" />
-          </div>
-          <p className="mt-3 text-3xl font-extrabold text-amber-400 font-mono">
-            {loading ? '-' : summary?.review_required_count ?? 0}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Ambiguous / uncalibrated scales</p>
-        </div>
+      {/* Metrics — all values come from the API; nothing invented. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatTile
+          label="Products scanned"
+          value={summary?.total_scans ?? 0}
+          hint="Total registered inspections"
+          icon={FileText}
+          loading={loading}
+        />
+        <StatTile
+          label="Compliant"
+          value={summary?.pass_count ?? 0}
+          hint="All mandatory declarations verified"
+          icon={ShieldCheck}
+          tone="pass"
+          loading={loading}
+        />
+        <StatTile
+          label="Violations"
+          value={summary?.fail_count ?? 0}
+          hint="Contraventions requiring action"
+          icon={AlertOctagon}
+          tone="fail"
+          loading={loading}
+        />
+        <StatTile
+          label="Needs verification"
+          value={summary?.review_required_count ?? 0}
+          hint="Awaiting officer adjudication"
+          icon={HelpCircle}
+          tone="warn"
+          loading={loading}
+        />
       </div>
 
-      {/* Core Principle Invariant Card */}
-      <div className="glass-panel rounded-xl p-6 border-l-4 border-l-gold-500">
-        <h3 className="text-sm font-bold text-gold-400 uppercase tracking-wider flex items-center space-x-2">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>Core Operational Invariant</span>
-        </h3>
-        <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-          <strong className="text-white">AI extracts and measures. Deterministic rules decide compliance.</strong> Under Legal Metrology regulations, automated predictions never directly penalize a manufacturer. The perception subsystem extracts declarations and visual dimensions; the authoritative Rule Engine evaluates statutory rules; and every potential non-compliance is supported by visual bounding box evidence.
-        </p>
-      </div>
-
-      {/* Recent Inspections Table */}
-      <div className="glass-panel rounded-xl overflow-hidden border border-slate-700/60">
-        <div className="px-6 py-4 border-b border-slate-700/60 flex items-center justify-between bg-gov-850">
-          <div>
-            <h2 className="text-base font-bold text-white">Recent Compliance Inspections</h2>
-            <p className="text-xs text-slate-400">Latest packaged commodities submitted for scanning</p>
-          </div>
-          <span className="text-xs font-mono text-slate-400 bg-gov-800 px-2.5 py-1 rounded border border-slate-700">
-            {scans.length} records
-          </span>
-        </div>
-
-        {scans.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <Scale className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-            <p className="text-base font-semibold text-slate-300">No inspection scans recorded yet.</p>
-            <p className="text-xs mt-1">Upload a packaged commodity image to begin automated verification.</p>
-            <button
-              onClick={onStartNewScan}
-              className="mt-4 px-4 py-2 bg-gov-700 hover:bg-gov-600 text-white text-xs font-semibold rounded-lg border border-gold-500/30 transition-all"
-            >
-              Upload First Package
-            </button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-gov-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700/80">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Recent activity */}
+        <Panel className="lg:col-span-2 overflow-hidden">
+          <PanelHeader
+            title="Recent inspections"
+            description="Most recent packages submitted for verification"
+            actions={
+              scans.length > 0 ? (
+                <Badge mono>{scans.length} total</Badge>
+              ) : undefined
+            }
+          />
+          {loading ? (
+            <TableSkeleton rows={5} cols={4} />
+          ) : recent.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="No inspections yet"
+              description="Upload a photograph of a packaged commodity to run OCR, visual verification and the statutory rule engine."
+              action={
+                <Button variant="primary" icon={ScanLine} onClick={onStartNewScan}>
+                  Scan your first product
+                </Button>
+              }
+            />
+          ) : (
+            <Table>
+              <thead>
                 <tr>
-                  <th className="px-6 py-3">Scan Number</th>
-                  <th className="px-6 py-3">Commodity</th>
-                  <th className="px-6 py-3">Verdict</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3">Timestamp</th>
-                  <th className="px-6 py-3 text-right">Action</th>
+                  <Th>Scan</Th>
+                  <Th className="hidden sm:table-cell">Commodity</Th>
+                  <Th>Result</Th>
+                  <Th className="hidden md:table-cell">Submitted</Th>
+                  <Th align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {scans.map((s) => (
-                  <tr key={s.id} className="hover:bg-gov-800/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-xs font-medium text-gold-300">{s.scan_number}</td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-200">{s.commodity_type}</td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={s.overall_verdict} size="sm" />
-                    </td>
-                    <td className="px-6 py-4 text-xs">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                        {s.status}
+                {recent.map((s) => (
+                  <tr
+                    key={s.id}
+                    onClick={() => onViewScan(s.id)}
+                    className="hover:bg-gov-800/50 transition-colors cursor-pointer"
+                  >
+                    <Td>
+                      <span className="font-mono text-xs text-slate-200">{s.scan_number}</span>
+                      <span className="block sm:hidden text-2xs text-slate-500 mt-0.5">
+                        {humanise(s.commodity_type)}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">
-                      {new Date(s.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
+                    </Td>
+                    <Td className="hidden sm:table-cell text-xs text-slate-400">
+                      {humanise(s.commodity_type)}
+                    </Td>
+                    <Td>
+                      <StatusBadge status={s.overall_verdict || s.status} size="sm" />
+                    </Td>
+                    <Td className="hidden md:table-cell text-xs text-slate-500 whitespace-nowrap">
+                      {formatDateTime(s.created_at)}
+                    </Td>
+                    <Td align="right">
                       <button
-                        onClick={() => onViewScan(s.id)}
-                        className="text-xs text-gold-400 hover:text-gold-300 font-semibold underline"
+                        onClick={(e) => { e.stopPropagation(); onViewScan(s.id); }}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-gold-400 hover:text-gold-300"
+                        aria-label={`View details for ${s.scan_number}`}
                       >
-                        View Details
+                        View
+                        <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        )}
+            </Table>
+          )}
+        </Panel>
+
+        {/* Side column */}
+        <div className="space-y-5">
+          <Panel className="p-5">
+            <h3 className="text-sm font-semibold text-slate-100">Compliance rate</h3>
+            <p className="text-2xs text-slate-500 mt-0.5">
+              Share of inspections with a fully compliant verdict
+            </p>
+            {loading ? (
+              <Skeleton className="h-9 w-24 mt-4" />
+            ) : (
+              <>
+                <p className="mt-4 text-4xl font-semibold text-slate-100 tabular-nums tracking-tight">
+                  {rate.toFixed(0)}
+                  <span className="text-lg text-slate-500 ml-0.5">%</span>
+                </p>
+                <Meter
+                  value={rate}
+                  tone={rate >= 80 ? 'pass' : rate >= 50 ? 'warn' : 'fail'}
+                  className="mt-3"
+                  label="Compliance rate"
+                />
+                <dl className="mt-4 pt-4 border-t border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <dt className="text-slate-400">Rules enforced</dt>
+                    <dd className="font-mono text-slate-200 tabular-nums">
+                      {summary?.active_rules_enforced ?? '—'}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between text-xs gap-3">
+                    <dt className="text-slate-400 shrink-0">Jurisdiction</dt>
+                    <dd className="text-slate-300 text-right text-2xs leading-snug">
+                      {summary?.enforcement_jurisdiction ?? '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </>
+            )}
+          </Panel>
+
+          <Panel className="p-5">
+            <h3 className="text-sm font-semibold text-slate-100">How verification works</h3>
+            <ol className="mt-3 space-y-3">
+              {[
+                { n: 1, t: 'Text extraction', d: 'PaddleOCR reads declarations with confidence and coordinates.' },
+                { n: 2, t: 'Visual verification', d: 'The VLM inspects symbols and label layout.' },
+                { n: 3, t: 'Rule evaluation', d: 'Deterministic PCR 2011 and FSSR 2020 rules decide the verdict.' },
+              ].map((s) => (
+                <li key={s.n} className="flex gap-3">
+                  <span className="shrink-0 w-5 h-5 rounded bg-gov-800 border border-slate-700 text-2xs font-semibold text-slate-400 flex items-center justify-center tabular-nums">
+                    {s.n}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-200">{s.t}</p>
+                    <p className="text-2xs text-slate-500 leading-relaxed mt-0.5">{s.d}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-4 pt-3.5 border-t border-slate-800 text-2xs text-slate-500 leading-relaxed">
+              AI extracts and measures. Deterministic rules decide compliance — no model
+              determines a verdict on its own.
+            </p>
+          </Panel>
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  CheckCircle2, XCircle, HelpCircle, Leaf, FlaskConical,
-  AlertTriangle, ListOrdered, Eye,
+  Leaf, FlaskConical, AlertTriangle, ListOrdered, ChevronDown, ChevronRight,
 } from 'lucide-react';
+import { clsx } from 'clsx';
+import { Panel, PanelHeader, StatusPill, Badge, EmptyState, Field, Meter } from '../ui';
+import { humanise } from '../../lib/verdict';
 
 export interface FSSRFinding {
   rule_id: string;
@@ -25,21 +27,13 @@ export interface FSSRFinding {
   severity?: string;
 }
 
-const STATUS_STYLES: Record<string, { label: string; cls: string; Icon: React.ElementType }> = {
-  compliant: {
-    label: 'COMPLIANT',
-    cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-    Icon: CheckCircle2,
-  },
-  violation: {
-    label: 'VIOLATION',
-    cls: 'bg-red-500/10 text-red-400 border-red-500/30',
-    Icon: XCircle,
-  },
+const STATUS_META = {
+  compliant: { kind: 'pass' as const, label: 'Compliant', accent: 'border-l-emerald-500' },
+  violation: { kind: 'fail' as const, label: 'Violation', accent: 'border-l-rose-500' },
   unable_to_verify: {
-    label: 'UNABLE TO VERIFY',
-    cls: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-    Icon: HelpCircle,
+    kind: 'warn' as const,
+    label: 'Unable to verify',
+    accent: 'border-l-amber-500',
   },
 };
 
@@ -63,28 +57,126 @@ const renderValue = (value: any): string => {
       .join(', ');
   }
   if (typeof value === 'object') {
-    return Object.entries(value)
-      .filter(([, v]) => Array.isArray(v) ? v.length > 0 : v != null)
-      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
-      .join(' • ') || '—';
+    return (
+      Object.entries(value)
+        .filter(([, v]) => (Array.isArray(v) ? v.length > 0 : v != null))
+        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
+        .join(' • ') || '—'
+    );
   }
   return String(value);
 };
 
-interface Props {
-  findings: FSSRFinding[];
-}
+const FSSRRow: React.FC<{ f: FSSRFinding }> = ({ f }) => {
+  const [open, setOpen] = useState(false);
+  const meta = STATUS_META[f.status] ?? STATUS_META.unable_to_verify;
+  const RuleIcon = RULE_ICONS[f.rule_id] ?? FlaskConical;
+  const hasEvidence = !!f.evidence?.length;
 
-export const FSSRFindingsView: React.FC<Props> = ({ findings = [] }) => {
+  return (
+    <div
+      className={clsx(
+        'bg-gov-850 border border-slate-800 border-l-2 rounded-r-lg',
+        meta.accent,
+      )}
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-md bg-gov-800 border border-slate-800 flex items-center justify-center shrink-0">
+              <RuleIcon className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-slate-100 leading-snug">
+                {f.title || humanise(f.rule_id.replace('FSSR_2020_', ''))}
+              </h4>
+              <p className="mt-0.5 text-2xs font-mono text-slate-500 break-words">
+                {f.rule_family} · {f.source_rule || f.rule_id}
+                {f.severity ? ` · ${f.severity}` : ''}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <StatusPill kind={meta.kind} label={meta.label} size="sm" />
+            <span className="text-2xs font-mono tabular-nums text-slate-500">
+              {(f.confidence * 100).toFixed(0)}%
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-400 leading-relaxed">{f.explanation}</p>
+
+        <dl className="mt-3 grid sm:grid-cols-2 gap-3">
+          <Field label="Detected" mono>{renderValue(f.extracted_value)}</Field>
+          <Field label="Expected">
+            <span className="text-xs text-slate-400">{f.expected_value || '—'}</span>
+          </Field>
+        </dl>
+
+        {hasEvidence && (
+          <>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="mt-3 inline-flex items-center gap-1.5 text-2xs font-medium text-slate-400 hover:text-slate-100 transition-colors"
+            >
+              {open ? (
+                <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+              {open ? 'Hide' : 'Show'} evidence ({f.evidence!.length})
+            </button>
+
+            {open && (
+              <ul className="mt-2.5 rounded-md border border-slate-800 bg-gov-900 divide-y divide-slate-800 animate-fade-in">
+                {f.evidence!.map((e, i) => (
+                  <li key={i} className="p-3 flex items-start gap-2.5">
+                    <Badge mono className="shrink-0">{e.source}</Badge>
+                    <div className="min-w-0 flex-1">
+                      {e.text_snippet && (
+                        <p className="text-xs text-slate-300 font-mono break-words">
+                          “{e.text_snippet}”
+                        </p>
+                      )}
+                      {e.note && (
+                        <p className="text-2xs text-slate-500 mt-0.5 leading-relaxed">{e.note}</p>
+                      )}
+                    </div>
+                    {e.confidence != null && (
+                      <div className="shrink-0 w-20">
+                        <p className="text-2xs font-mono tabular-nums text-slate-500 text-right">
+                          {(e.confidence * 100).toFixed(0)}%
+                        </p>
+                        <Meter
+                          value={e.confidence * 100}
+                          className="mt-1"
+                          label="Evidence confidence"
+                        />
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const FSSRFindingsView: React.FC<{ findings: FSSRFinding[] }> = ({ findings = [] }) => {
   if (!findings.length) {
     return (
-      <div className="bg-gov-850 border border-slate-800 rounded-xl p-8 text-center">
-        <FlaskConical className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-300 font-medium">No FSSR 2020 results available</p>
-        <p className="text-slate-500 text-sm mt-1">
-          Run the analysis pipeline to evaluate ingredient declarations.
-        </p>
-      </div>
+      <Panel>
+        <EmptyState
+          icon={FlaskConical}
+          title="No FSSR 2020 results yet"
+          description="Run the verification pipeline to evaluate ingredient declarations against the FSS (Labelling & Display) Regulations, 2020."
+        />
+      </Panel>
     );
   }
 
@@ -93,99 +185,40 @@ export const FSSRFindingsView: React.FC<Props> = ({ findings = [] }) => {
     return acc;
   }, {});
 
+  // Violations first, then unverifiable, then compliant.
+  const ORDER = { violation: 0, unable_to_verify: 1, compliant: 2 } as const;
+  const sorted = findings
+    .slice()
+    .sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9));
+
   return (
     <div className="space-y-4">
-      {/* Summary strip */}
-      <div className="bg-gov-850 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <FlaskConical className="w-4 h-4 text-gold-400" />
-              FSS (Labelling &amp; Display) Regulations, 2020
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Ingredient rule family — evaluated separately from PCR 2011
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            {(['compliant', 'violation', 'unable_to_verify'] as const).map((s) =>
-              counts[s] ? (
-                <span key={s} className={`px-2.5 py-1 rounded-md border font-semibold ${STATUS_STYLES[s].cls}`}>
-                  {counts[s]} {STATUS_STYLES[s].label}
-                </span>
-              ) : null,
-            )}
-          </div>
-        </div>
+      <Panel>
+        <PanelHeader
+          title="FSS (Labelling & Display) Regulations, 2020"
+          description="Ingredient rule family — evaluated separately from PCR 2011"
+          actions={
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(['violation', 'unable_to_verify', 'compliant'] as const).map((s) =>
+                counts[s] ? (
+                  <StatusPill
+                    key={s}
+                    kind={STATUS_META[s].kind}
+                    label={`${counts[s]} ${STATUS_META[s].label}`}
+                    size="sm"
+                  />
+                ) : null,
+              )}
+            </div>
+          }
+        />
+      </Panel>
+
+      <div className="space-y-2.5">
+        {sorted.map((f) => (
+          <FSSRRow key={f.rule_id} f={f} />
+        ))}
       </div>
-
-      {findings.map((f) => {
-        const style = STATUS_STYLES[f.status] ?? STATUS_STYLES.unable_to_verify;
-        const RuleIcon = RULE_ICONS[f.rule_id] ?? FlaskConical;
-        const { Icon } = style;
-
-        return (
-          <div key={f.rule_id} className="bg-gov-850 border border-slate-800 rounded-xl p-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-slate-800/80 flex items-center justify-center shrink-0">
-                  <RuleIcon className="w-4 h-4 text-gold-400" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="text-white font-semibold text-sm">{f.title || f.rule_id}</h4>
-                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                    {f.rule_family} • {f.source_rule || f.rule_id}
-                    {f.severity ? ` • ${f.severity}` : ''}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`px-2.5 py-1 rounded-md border text-[11px] font-bold flex items-center gap-1.5 ${style.cls}`}>
-                  <Icon className="w-3.5 h-3.5" />
-                  {style.label}
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {(f.confidence * 100).toFixed(0)}%
-                </span>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-300 mt-3 leading-relaxed">{f.explanation}</p>
-
-            <div className="grid sm:grid-cols-2 gap-3 mt-4">
-              <div className="bg-gov-900/60 rounded-lg p-3 border border-slate-800/80">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Extracted</p>
-                <p className="text-xs text-slate-200 mt-1 break-words">{renderValue(f.extracted_value)}</p>
-              </div>
-              <div className="bg-gov-900/60 rounded-lg p-3 border border-slate-800/80">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Expected</p>
-                <p className="text-xs text-slate-200 mt-1 break-words">{f.expected_value || '—'}</p>
-              </div>
-            </div>
-
-            {f.evidence && f.evidence.length > 0 && (
-              <div className="mt-3 border-t border-slate-800 pt-3">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold flex items-center gap-1.5">
-                  <Eye className="w-3 h-3" /> Evidence
-                </p>
-                <ul className="mt-2 space-y-1.5">
-                  {f.evidence.map((e, i) => (
-                    <li key={i} className="text-[11px] text-slate-400 flex gap-2">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0 h-fit">
-                        {e.source}
-                      </span>
-                      <span className="break-words">
-                        {e.text_snippet ? `"${e.text_snippet}"` : ''}
-                        {e.note ? (e.text_snippet ? ` — ${e.note}` : e.note) : ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 };

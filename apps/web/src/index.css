@@ -2,37 +2,220 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   PackSure design tokens
+   Values are space-separated RGB channels consumed by tailwind.config.js.
+   LIGHT is the default; `.dark` on <html> swaps the whole system.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — warm neutral paper, not stark white */
+  --surface-page:   252 252 253;
+  --surface-sunken: 246 247 249;
+  --surface-1:      255 255 255;
+  --surface-2:      244 245 248;
+  --surface-3:      234 236 241;
+  --surface-4:      222 225 232;
+  --surface-5:      208 212 222;
+
+  /* Neutral ramp — INVERTED for light mode.
+     slate-100 => darkest (primary text); slate-800 => hairline border. */
+  --n-50:  15 23 42;
+  --n-100: 17 24 39;
+  --n-200: 31 41 55;
+  --n-300: 55 65 81;
+  --n-400: 90 100 118;
+  --n-500: 100 110 128;
+  --n-600: 160 167 181;
+  --n-700: 205 210 219;
+  --n-800: 219 223 231;
+  --n-900: 240 242 246;
+  --n-950: 248 249 251;
+
+  /* Accent — restrained indigo. Professional, not neon. */
+  --accent-700: 55 48 163;
+  --accent-600: 67 56 202;
+  --accent-500: 79 70 229;
+  --accent-400: 79 70 229;
+  --accent-300: 67 56 202;
+
+  /* Status — controlled, accessible on light surfaces */
+  --pass-950: 236 253 245;
+  --pass-600: 4 120 87;
+  --pass-500: 5 150 105;
+  --pass-400: 4 120 87;
+  --pass-300: 6 95 70;
+
+  --fail-950: 254 242 242;
+  --fail-600: 190 18 60;
+  --fail-500: 225 29 72;
+  --fail-400: 190 18 60;
+  --fail-300: 159 18 57;
+
+  --warn-950: 255 251 235;
+  --warn-600: 180 83 9;
+  --warn-500: 217 119 6;
+  --warn-400: 180 83 9;
+  --warn-300: 146 64 14;
+
+  --info-500: 2 132 199;
+  --info-400: 3 105 161;
+  --info-300: 7 89 133;
+
+  --shadow-color: 15 23 42;
+  --ring-color: var(--accent-500);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Deep charcoal, never pure black */
+  --surface-page:   12 14 19;
+  --surface-sunken: 8 10 14;
+  --surface-1:      20 23 31;
+  --surface-2:      27 31 41;
+  --surface-3:      36 41 54;
+  --surface-4:      48 54 70;
+  --surface-5:      62 69 88;
+
+  /* Neutral ramp — natural direction for dark mode */
+  --n-50:  248 250 252;
+  --n-100: 241 245 249;
+  --n-200: 226 232 240;
+  --n-300: 199 206 219;
+  --n-400: 155 164 182;
+  --n-500: 126 136 155;
+  --n-600: 95 104 122;
+  --n-700: 66 74 90;
+  --n-800: 45 51 65;
+  --n-900: 31 36 47;
+  --n-950: 20 23 31;
+
+  /* Brighter accent for dark surfaces */
+  --accent-700: 99 102 241;
+  --accent-600: 109 112 245;
+  --accent-500: 129 133 250;
+  --accent-400: 147 152 255;
+  --accent-300: 165 180 252;
+
+  --pass-950: 6 34 27;
+  --pass-600: 16 185 129;
+  --pass-500: 52 211 153;
+  --pass-400: 52 211 153;
+  --pass-300: 110 231 183;
+
+  --fail-950: 42 12 18;
+  --fail-600: 244 63 94;
+  --fail-500: 251 113 133;
+  --fail-400: 251 113 133;
+  --fail-300: 253 164 175;
+
+  --warn-950: 41 26 6;
+  --warn-600: 245 158 11;
+  --warn-500: 251 191 36;
+  --warn-400: 251 191 36;
+  --warn-300: 253 216 117;
+
+  --info-500: 56 189 248;
+  --info-400: 56 189 248;
+  --info-300: 125 211 252;
+
+  --shadow-color: 0 0 0;
+}
+
 @layer base {
+  * {
+    border-color: rgb(var(--n-800));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply bg-gov-900 text-slate-100;
+    @apply bg-gov-900 text-slate-100 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Visible, consistent keyboard focus everywhere. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent-500));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+
+  /* Native controls follow the theme (dropdown popups, date pickers…). */
+  select, input, textarea {
+    color-scheme: inherit;
   }
 }
 
-/* Glassmorphism panel styles */
-.glass-panel {
-  background: rgba(16, 34, 58, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(212, 175, 55, 0.15);
+@layer components {
+  .surface-card {
+    @apply bg-gov-850 border border-slate-800 rounded-lg;
+  }
+
+  .hairline {
+    @apply border-slate-800;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply relative overflow-hidden bg-gov-800 rounded;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--n-700) / 0.18),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: shimmer 1.6s infinite;
+  }
 }
 
-.glass-panel-subtle {
-  background: rgba(11, 23, 40, 0.6);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-/* Custom Scrollbars */
+/* Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #07101B;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #19355A;
-  border-radius: 3px;
+  background: rgb(var(--n-700));
+  border-radius: 999px;
+  border: 2px solid rgb(var(--surface-page));
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #23497C;
+  background: rgb(var(--n-600));
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--n-700)) transparent;
+}
+
+/* Honour the OS reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

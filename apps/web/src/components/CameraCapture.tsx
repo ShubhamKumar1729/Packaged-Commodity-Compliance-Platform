@@ -93,35 +93,42 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full bg-gov-900 rounded-2xl overflow-hidden shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Capture package image"
+    >
+      <div className="max-w-4xl w-full bg-gov-850 border border-slate-700 rounded-xl overflow-hidden shadow-2xl animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <div className="flex items-center space-x-3">
-            <Camera className="w-6 h-6 text-gold-400" />
-            <h2 className="text-lg font-bold text-white">Capture Package Image</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Camera className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-slate-100">Capture package image</h2>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-all"
+            aria-label="Close camera"
+            className="w-8 h-8 rounded-md hover:bg-gov-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Camera View / Preview */}
         <div className="relative bg-black aspect-video flex items-center justify-center">
           {error ? (
-            <div className="text-center p-8 space-y-3">
-              <div className="w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center mx-auto">
-                <X className="w-8 h-8 text-rose-400" />
+            <div className="text-center p-8 space-y-3 max-w-sm">
+              <div className="w-11 h-11 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto">
+                <X className="w-5 h-5 text-rose-400" aria-hidden="true" />
               </div>
-              <p className="text-rose-300 text-sm">{error}</p>
+              <p className="text-sm font-semibold text-slate-100">Camera unavailable</p>
+              <p className="text-xs text-slate-400 leading-relaxed">{error}</p>
               <button
                 onClick={startCamera}
-                className="px-4 py-2 bg-gold-500 hover:bg-gold-400 text-slate-950 rounded-lg text-sm font-semibold transition-all"
+                className="inline-flex items-center justify-center h-9 px-3.5 bg-gold-500 hover:bg-gold-600 text-white dark:text-gov-950 rounded-md text-sm font-medium transition-colors"
               >
-                Retry Camera Access
+                Retry camera access
               </button>
             </div>
           ) : capturedImage ? (
@@ -141,13 +148,13 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
               />
               {/* Overlay Guidelines */}
               <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-4 border-2 border-gold-400/40 rounded-xl"></div>
-                <div className="absolute top-1/2 left-0 right-0 h-px bg-gold-400/30"></div>
-                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gold-400/30"></div>
+                <div className="absolute inset-5 border border-white/30 rounded-lg"></div>
+                <div className="absolute top-1/2 left-0 right-0 h-px bg-white/15"></div>
+                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/15"></div>
               </div>
-              <div className="absolute bottom-6 left-0 right-0 text-center">
-                <p className="text-white text-sm font-semibold bg-black/60 inline-block px-4 py-2 rounded-full">
-                  Align package within the frame
+              <div className="absolute bottom-5 left-0 right-0 text-center">
+                <p className="text-white text-xs font-medium bg-black/60 inline-block px-3 py-1.5 rounded-md">
+                  Align the package within the frame
                 </p>
               </div>
             </>
@@ -156,48 +163,50 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
         </div>
 
         {/* Controls */}
-        <div className="p-4 flex items-center justify-center space-x-4">
+        <div className="p-5 flex items-center justify-center gap-4">
           {capturedImage ? (
             <>
               <button
                 onClick={retakePhoto}
-                className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-semibold flex items-center space-x-2 transition-all"
+                className="inline-flex items-center gap-2 h-11 px-5 bg-gov-800 hover:bg-gov-700 text-slate-100 border border-slate-700 rounded-lg text-sm font-medium transition-colors"
               >
-                <RotateCw className="w-4 h-4" />
-                <span>Retake</span>
+                <RotateCw className="w-4 h-4" aria-hidden="true" />
+                Retake
               </button>
               <button
                 onClick={confirmCapture}
-                className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white rounded-lg font-semibold flex items-center space-x-2 transition-all"
+                className="inline-flex items-center gap-2 h-11 px-5 bg-gold-500 hover:bg-gold-600 text-white dark:text-gov-950 rounded-lg text-sm font-medium transition-colors"
               >
-                <CheckCircle className="w-4 h-4" />
-                <span>Use This Photo</span>
+                <CheckCircle className="w-4 h-4" aria-hidden="true" />
+                Use this photo
               </button>
             </>
           ) : (
             <>
               <button
                 onClick={switchCamera}
-                className="w-12 h-12 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center text-white transition-all"
+                className="w-11 h-11 bg-gov-800 hover:bg-gov-700 border border-slate-700 rounded-full flex items-center justify-center text-slate-200 transition-colors"
                 title="Switch camera"
+                aria-label="Switch camera"
               >
                 <RotateCw className="w-5 h-5" />
               </button>
               <button
                 onClick={capturePhoto}
                 disabled={!stream}
-                className="w-16 h-16 bg-gradient-to-r from-gold-500 to-amber-600 hover:from-gold-400 hover:to-amber-500 disabled:from-slate-700 disabled:to-slate-600 rounded-full flex items-center justify-center shadow-lg hover:shadow-gold-500/30 transition-all disabled:cursor-not-allowed"
+                aria-label="Capture photo"
+                className="w-16 h-16 bg-gold-500 hover:bg-gold-600 disabled:bg-gov-700 rounded-full flex items-center justify-center transition-colors disabled:cursor-not-allowed"
               >
-                <div className="w-14 h-14 rounded-full border-4 border-white"></div>
+                <div className="w-14 h-14 rounded-full border-4 border-white/90"></div>
               </button>
               <div className="w-12"></div> {/* Spacer for symmetry */}
             </>
           )}
         </div>
 
-        <div className="px-4 pb-4 text-center">
-          <p className="text-xs text-slate-400">
-            Ensure good lighting and the Principal Display Panel is clearly visible
+        <div className="px-5 pb-5 text-center">
+          <p className="text-2xs text-slate-500">
+            Ensure good lighting and that the Principal Display Panel is clearly visible.
           </p>
         </div>
       </div>
