@@ -10,12 +10,23 @@ Design notes:
     empty token list, which downstream fusion reports as `unable_to_verify`.
 """
 import logging
+import os
 import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+
+# paddlepaddle 3.x ships an oneDNN (MKL-DNN) CPU backend that cannot execute
+# the PP-OCRv6 detection graph: inference aborts with
+#   NotImplementedError: ConvertPirAttribute2RuntimeAttribute not support
+#   [pir::ArrayAttribute<pir::DoubleAttribute>]  (onednn_instruction.cc)
+# Paddle reads these FLAGS_* env vars when its C++ runtime initialises, so they
+# must be set BEFORE `paddle` is first imported anywhere in the process.
+# Falling back to Paddle's native CPU kernels is slightly slower but correct.
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
 
 from app.schemas.ocr import OCRResult, OCRToken
 from services.ocr.base import BaseOCRProvider
@@ -63,7 +74,17 @@ class PaddleOCREngine(BaseOCRProvider):
 
         # PaddleOCR renamed several kwargs across 2.x -> 3.x. Try the modern
         # signature first and degrade gracefully instead of hard-failing.
+        # `enable_mkldnn=False` is tried first: paddlepaddle 3.x's oneDNN CPU
+        # kernels crash on the PP-OCRv6 detection graph. Older builds do not
+        # accept the kwarg, so the variants below drop it.
         attempts: List[Dict[str, Any]] = [
+            {
+                "lang": self.lang,
+                "use_textline_orientation": self.use_textline_orientation,
+                "use_doc_orientation_classify": False,
+                "use_doc_unwarping": False,
+                "enable_mkldnn": False,
+            },
             {
                 "lang": self.lang,
                 "use_textline_orientation": self.use_textline_orientation,
@@ -98,12 +119,26 @@ class PaddleOCREngine(BaseOCRProvider):
         return self._ocr
 
     def is_available(self) -> bool:
-        """Probe whether the engine can actually run, without raising."""
+        """
+        Probe whether the engine can actually run, without raising.
+
+        Constructing the pipeline is not sufficient: paddlepaddle's oneDNN CPU
+        backend only fails once a graph is executed. So run one tiny inference
+        and treat a crash as unavailable.
+        """
         try:
             self._get_ocr()
-            return True
         except Exception as exc:
             logger.warning("PaddleOCR unavailable: %s", exc)
+            return False
+
+        try:
+            probe = np.full((64, 160, 3), 255, dtype=np.uint8)
+            cv2.putText(probe, "AB12", (8, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 3)
+            self._run(probe)
+            return True
+        except Exception as exc:
+            logger.warning("PaddleOCR loaded but inference failed: %s", exc)
             return False
 
     # ------------------------------------------------------------------
@@ -114,13 +149,25 @@ class PaddleOCREngine(BaseOCRProvider):
         ocr = self._get_ocr()
 
         raw = None
+        predict_error: Optional[Exception] = None
         if hasattr(ocr, "predict"):
             try:
                 raw = ocr.predict(img)
             except Exception as exc:
+                predict_error = exc
                 logger.debug("predict() failed, falling back to ocr(): %s", exc)
         if raw is None:
-            raw = ocr.ocr(img)
+            try:
+                raw = ocr.ocr(img)
+            except Exception as exc:
+                # In PaddleOCR 3.x, ocr() simply delegates to predict(), so this
+                # is the same failure twice. Surface it as an engine-unavailable
+                # error rather than a bare NotImplementedError from deep inside
+                # Paddle: the caller must report `unable_to_verify`, never
+                # substitute fabricated text.
+                raise PaddleOCRUnavailable(
+                    f"PaddleOCR inference failed: {exc}"
+                ) from (predict_error or exc)
 
         out: List[Tuple[List[List[float]], str, float]] = []
         if not raw:

@@ -1,4 +1,4 @@
-"""Prove what the OCR engine actually reads from a given image.
+r"""Prove what the OCR engine actually reads from a given image.
 
 Bypasses the API, the database and every stored scan record, so the output
 reflects only the engine and the file you point it at.
