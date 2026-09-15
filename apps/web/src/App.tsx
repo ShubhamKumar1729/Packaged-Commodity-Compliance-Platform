@@ -11,6 +11,7 @@ import { ThemeProvider } from './theme/ThemeProvider';
 const AppShell: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [systemReady, setSystemReady] = useState<boolean>(false);
+  const [mockOcr, setMockOcr] = useState<boolean>(false);
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,6 +19,9 @@ const AppShell: React.FC = () => {
       try {
         const ready = await api.getReadiness();
         setSystemReady(ready.status === 'ready');
+        // Reported by the API process itself, so it reflects the server's
+        // configuration rather than any local shell or CLI environment.
+        setMockOcr(ready.using_mock_ocr === true);
       } catch (err) {
         setSystemReady(false);
       }
@@ -58,6 +62,21 @@ const AppShell: React.FC = () => {
         setActiveTab={handleTabChange}
         systemReady={systemReady}
       />
+
+      {mockOcr && (
+        <div
+          role="alert"
+          className="bg-rose-600 text-white dark:text-gov-950 px-4 sm:px-6 lg:px-8 py-2.5"
+        >
+          <p className="max-w-[1400px] mx-auto text-xs font-medium">
+            <span className="font-semibold">Mock OCR engine active.</span>{' '}
+            This server returns fixed sample text instead of reading your images —
+            every scan result is simulated. Set{' '}
+            <code className="font-mono">OCR_PROVIDER=paddleocr</code> and restart the
+            API server.
+          </p>
+        </div>
+      )}
 
       <main
         id="main-content"
