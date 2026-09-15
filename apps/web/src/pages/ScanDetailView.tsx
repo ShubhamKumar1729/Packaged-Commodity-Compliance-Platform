@@ -115,6 +115,12 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
   const hasAnalysis = scan.status === 'COMPLETED' || (scan.findings && scan.findings.length > 0);
   const hasFacts = !!scan.facts;
 
+  // The backend records which engine produced the text. The mock engine emits
+  // fixed sample text regardless of the uploaded image, so results sourced
+  // from it must never be mistaken for a real inspection.
+  const ocrProvider: string | undefined = scan.evidence?.ocr?.provider;
+  const isMockOcr = typeof ocrProvider === 'string' && ocrProvider.toLowerCase() === 'mock';
+
   const TABS = [
     { id: 'compliance', label: 'Compliance', icon: ShieldCheck, count: scan.findings?.length || 0 },
     { id: 'facts', label: 'Declarations', icon: ClipboardList },
@@ -180,6 +186,17 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
           )}
         </div>
       </div>
+
+      {isMockOcr && (
+        <Alert tone="fail" title="Simulated data — not a real inspection">
+          These findings were produced by the <strong>mock OCR engine</strong>, which
+          returns fixed sample text regardless of the uploaded image. The product
+          details below do not describe your package. Set{' '}
+          <code className="font-mono">OCR_PROVIDER=paddleocr</code> in your{' '}
+          <code className="font-mono">.env</code>, restart the API server, then run
+          the scan again.
+        </Alert>
+      )}
 
       {hasAnalysis && (
         <TabBar label="Inspection sections">
