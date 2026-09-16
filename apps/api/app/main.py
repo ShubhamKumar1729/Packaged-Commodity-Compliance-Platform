@@ -29,6 +29,13 @@ async def lifespan(app: FastAPI):
         print(f"[Startup] OCR provider: {settings.OCR_PROVIDER} | "
               f"VLM: {settings.VLM_PROVIDER} | "
               f"mock fallback: {settings.OCR_ALLOW_MOCK_FALLBACK}")
+
+    # State the assistant's model, so a stale process or an unread .env is
+    # visible at startup rather than only in a chat error message.
+    if settings.GROQ_API_KEY:
+        print(f"[Startup] Pia assistant: enabled | model: {settings.GROQ_MODEL}")
+    else:
+        print("[Startup] Pia assistant: disabled (no GROQ_API_KEY)")
     yield
     # Shutdown
     print("[Shutdown] Cleaning up resources...")

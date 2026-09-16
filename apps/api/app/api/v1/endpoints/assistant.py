@@ -19,6 +19,7 @@ OCR/VLM or rule-evaluation pipelines.
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 from typing import List, Literal, Optional
 
@@ -26,7 +27,7 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.core.config import settings
+from app.core.config import REPO_ROOT, settings
 from services.compliance.registry import rule_registry
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,23 @@ class ChatResponse(BaseModel):
     # True when the reply was produced without calling the model (refusal or
     # configuration problem). Lets the UI style it differently.
     handled_locally: bool = False
+
+
+def _model_in_dotenv() -> bool:
+    """True when a .env beside the repo root actually declares GROQ_MODEL."""
+    try:
+        env_path = REPO_ROOT / ".env"
+        if not env_path.is_file():
+            return False
+        for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            if stripped.split("=", 1)[0].strip() == "GROQ_MODEL":
+                return True
+    except OSError:
+        pass
+    return False
 
 
 # --------------------------------------------------------------- scope guard
@@ -220,6 +238,13 @@ def assistant_status():
         "enabled": bool(settings.GROQ_API_KEY),
         "model": settings.GROQ_MODEL,
         "name": "Pia",
+        # Whether the model name came from configuration or the built-in
+        # default, so a stale process is identifiable without a chat attempt.
+        "model_source": (
+            "environment" if os.environ.get("GROQ_MODEL")
+            else ".env" if _model_in_dotenv()
+            else "built-in default"
+        ),
     }
 
 
@@ -291,11 +316,20 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     if res.status_code == 404:
         # Almost always a decommissioned or misspelled model name, which is
         # easy to mistake for an auth problem.
-        logger.warning("Groq rejected the model %r: %s", settings.GROQ_MODEL, res.text[:500])
+        logger.warning("Groq rejected the model %r: %s", model, res.text[:500])
+        # Naming the source matters: a stale server process reports the old
+        # built-in default even after .env has been corrected.
+        origin = (
+            "read from the environment/.env"
+            if os.environ.get("GROQ_MODEL") or _model_in_dotenv()
+            else "the built-in default, meaning your .env value was NOT read"
+        )
         return ChatResponse(
             reply=(
-                f"The model '{settings.GROQ_MODEL}' isn't available on this account. "
-                "Set GROQ_MODEL in .env to a current Groq model and restart the server."
+                f"The model '{model}' isn't available on this account. "
+                f"That value is {origin}. "
+                "Set GROQ_MODEL in .env (for example openai/gpt-oss-120b) and "
+                "fully restart the API server."
             ),
             handled_locally=True,
         )

@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Pia, the in-product assistant. Optional: when GROQ_API_KEY is empty the
     # assistant widget reports itself as unconfigured and nothing else changes.
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     model_config = {
         "env_file": ".env",
