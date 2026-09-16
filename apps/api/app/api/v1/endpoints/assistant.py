@@ -269,9 +269,37 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             handled_locally=True,
         )
 
-    if res.status_code == 401:
+    if res.status_code in (401, 403):
+        logger.warning("Groq rejected the credentials (%s): %s", res.status_code, res.text[:500])
         return ChatResponse(
-            reply="My API key was rejected. Please check GROQ_API_KEY in the .env file.",
+            reply=(
+                "My API key was rejected. Check GROQ_API_KEY in the .env file, "
+                "and make sure the API server was restarted after it changed."
+            ),
+            handled_locally=True,
+        )
+
+    if res.status_code == 404:
+        # Almost always a decommissioned or misspelled model name, which is
+        # easy to mistake for an auth problem.
+        logger.warning("Groq rejected the model %r: %s", settings.GROQ_MODEL, res.text[:500])
+        return ChatResponse(
+            reply=(
+                f"The model '{settings.GROQ_MODEL}' isn't available on this account. "
+                "Set GROQ_MODEL in .env to a current Groq model and restart the server."
+            ),
+            handled_locally=True,
+        )
+
+    if res.status_code == 400:
+        detail = ""
+        try:
+            detail = res.json().get("error", {}).get("message", "")
+        except ValueError:
+            pass
+        logger.warning("Groq rejected the request: %s", res.text[:500])
+        return ChatResponse(
+            reply=detail or "My language service rejected that request. Please try again.",
             handled_locally=True,
         )
     if res.status_code == 429:

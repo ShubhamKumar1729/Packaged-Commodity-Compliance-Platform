@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, ChevronRight, Inbox, SearchX } from 'lucide-react';
+import { Search, ChevronRight, Inbox, SearchX, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { ScanItem } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
@@ -7,6 +7,7 @@ import {
   Panel, Table, Th, Td, EmptyState, TableSkeleton, Select, Badge, Meter,
 } from '../components/ui';
 import { formatDateTime, humanise, scoreTone } from '../lib/verdict';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface HistoryViewProps {
   onViewScan: (scanId: string) => void;
@@ -17,6 +18,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onViewScan }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [verdictFilter, setVerdictFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<ScanItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadScans() {
@@ -31,6 +35,22 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onViewScan }) => {
     }
     loadScans();
   }, []);
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteScan(pendingDelete.id);
+      // Drop it locally rather than refetching, so the table does not flash.
+      setScans((prev) => prev.filter((x) => x.id !== pendingDelete.id));
+      setPendingDelete(null);
+    } catch {
+      setDeleteError('That inspection could not be deleted. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // Filtering logic preserved exactly.
   const filteredScans = useMemo(
@@ -173,14 +193,24 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onViewScan }) => {
                     {formatDateTime(s.created_at)}
                   </Td>
                   <Td align="right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onViewScan(s.id); }}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-gold-400 hover:text-gold-300"
-                      aria-label={`Inspect ${s.scan_number}`}
-                    >
-                      Inspect
-                      <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onViewScan(s.id); }}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-gold-400 hover:text-gold-300"
+                        aria-label={`Inspect ${s.scan_number}`}
+                      >
+                        Inspect
+                        <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setPendingDelete(s); }}
+                        className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                        aria-label={`Delete inspection ${s.scan_number}`}
+                        title="Delete inspection"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
                   </Td>
                 </tr>
               ))}
@@ -188,6 +218,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onViewScan }) => {
           </Table>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        busy={deleting}
+        title="Delete this inspection?"
+        description={
+          <>
+            <span className="font-mono text-slate-300">{pendingDelete?.scan_number}</span> and its
+            stored images, findings and officer review notes will be permanently removed. This
+            cannot be undone.
+            {deleteError && <span className="block mt-2 text-rose-400">{deleteError}</span>}
+          </>
+        }
+        confirmLabel="Delete inspection"
+        onConfirm={confirmDelete}
+        onCancel={() => { setPendingDelete(null); setDeleteError(null); }}
+      />
     </div>
   );
 };

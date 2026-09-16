@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft, Play, RefreshCw, Layers, FileText, ShieldCheck,
-  ClipboardList, Ruler, Leaf, ScanText,
+  ClipboardList, Ruler, Leaf, ScanText, Trash2,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { ComplianceFindingsView } from '../components/compliance/ComplianceFindingsView';
@@ -14,6 +14,7 @@ import {
   Panel, Button, LinkButton, Alert, Skeleton, TabBar, Tab, Badge,
 } from '../components/ui';
 import { formatDateTime, humanise } from '../lib/verdict';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface ScanDetailViewProps {
   scanId: string;
@@ -32,6 +33,9 @@ const humaniseError = (raw: string): string => {
 };
 
 export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }) => {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [scan, setScan] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
@@ -68,6 +72,20 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
       setAnalyzing(false);
     }
   };
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteScan(scanId);
+      // The record no longer exists, so return to the list rather than
+      // leaving a detail view pointing at a deleted scan.
+      onBack();
+    } catch {
+      setDeleteError('That inspection could not be deleted. Please try again.');
+      setDeleting(false);
+    }
+  }
 
   const backButton = (
     <button
@@ -184,6 +202,15 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
               </Button>
             </>
           )}
+          <Button
+            variant="ghost"
+            icon={Trash2}
+            onClick={() => setConfirmingDelete(true)}
+            aria-label={`Delete inspection ${scan.scan_number}`}
+            className="text-slate-500 hover:text-rose-400"
+          >
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -267,6 +294,23 @@ export const ScanDetailView: React.FC<ScanDetailViewProps> = ({ scanId, onBack }
           )}
         </Panel>
       )}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        busy={deleting}
+        title="Delete this inspection?"
+        description={
+          <>
+            <span className="font-mono text-slate-300">{scan.scan_number}</span> and its stored
+            images, findings and officer review notes will be permanently removed. This cannot be
+            undone.
+            {deleteError && <span className="block mt-2 text-rose-400">{deleteError}</span>}
+          </>
+        }
+        confirmLabel="Delete inspection"
+        onConfirm={handleDelete}
+        onCancel={() => { setConfirmingDelete(false); setDeleteError(null); }}
+      />
     </div>
   );
 };

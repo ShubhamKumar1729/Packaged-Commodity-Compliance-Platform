@@ -33,6 +33,12 @@ export const api = {
     return res.json();
   },
 
+  async deleteScan(scanId: string): Promise<{ deleted: boolean; scan_number: string }> {
+    const res = await fetch(`${API_BASE}/scans/${scanId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete inspection');
+    return res.json();
+  },
+
   async getRules(): Promise<LegalRuleSet> {
     const res = await fetch(`${API_BASE}/rules`);
     if (!res.ok) throw new Error('Failed to fetch legal rules');

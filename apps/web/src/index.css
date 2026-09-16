@@ -34,12 +34,13 @@
   --n-900: 240 242 246;
   --n-950: 248 249 251;
 
-  /* Accent — restrained indigo. Professional, not neon. */
-  --accent-700: 55 48 163;
-  --accent-600: 67 56 202;
-  --accent-500: 79 70 229;
-  --accent-400: 79 70 229;
-  --accent-300: 67 56 202;
+  /* Accent — restrained deep violet/plum. Professional, not neon, and
+     distinct from the green/red/amber status ramps. */
+  --accent-700: 88 28 96;
+  --accent-600: 112 36 122;
+  --accent-500: 134 44 145;
+  --accent-400: 112 36 122;
+  --accent-300: 88 28 96;
 
   /* Status — controlled, accessible on light surfaces */
   --pass-950: 236 253 245;
@@ -60,9 +61,9 @@
   --warn-400: 180 83 9;
   --warn-300: 146 64 14;
 
-  --info-500: 2 132 199;
-  --info-400: 3 105 161;
-  --info-300: 7 89 133;
+  --info-500: 13 124 124;
+  --info-400: 14 103 103;
+  --info-300: 15 86 86;
 
   --shadow-color: 15 23 42;
   --ring-color: var(--accent-500);
@@ -94,11 +95,11 @@
   --n-950: 20 23 31;
 
   /* Brighter accent for dark surfaces */
-  --accent-700: 99 102 241;
-  --accent-600: 109 112 245;
-  --accent-500: 129 133 250;
-  --accent-400: 147 152 255;
-  --accent-300: 165 180 252;
+  --accent-700: 163 76 175;
+  --accent-600: 180 90 192;
+  --accent-500: 198 109 209;
+  --accent-400: 212 133 222;
+  --accent-300: 226 165 233;
 
   --pass-950: 6 34 27;
   --pass-600: 16 185 129;
@@ -118,9 +119,9 @@
   --warn-400: 251 191 36;
   --warn-300: 253 216 117;
 
-  --info-500: 56 189 248;
-  --info-400: 56 189 248;
-  --info-300: 125 211 252;
+  --info-500: 45 200 195;
+  --info-400: 45 200 195;
+  --info-300: 110 224 219;
 
   --shadow-color: 0 0 0;
 }

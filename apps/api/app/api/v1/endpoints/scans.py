@@ -383,3 +383,45 @@ def download_scan_pdf_report(scan_id: str, db: Session = Depends(get_db)):
             "Content-Disposition": f"inline; filename={filename}"
         }
     )
+
+
+@router.delete("/scans/{scan_id}")
+def delete_scan(scan_id: str, db: Session = Depends(get_db)):
+    """
+    Permanently remove an inspection record.
+
+    Deletes the database row, any officer review log entries for it, and the
+    uploaded/annotated image files from storage, so a discarded inspection
+    leaves nothing behind. Files that are already gone are ignored: a missing
+    file must not block removal of the record.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan record not found")
+
+    scan_number = scan.scan_number
+
+    # Remove stored artefacts before the row, so a failure here cannot orphan
+    # files behind a deleted record.
+    for path in (scan.image_path, scan.annotated_image_path):
+        if not path:
+            continue
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            # Storage cleanup is best-effort; the record still goes.
+            pass
+
+    deleted_reviews = (
+        db.query(ReviewLog).filter(ReviewLog.scan_id == scan_id).delete(synchronize_session=False)
+    )
+    db.delete(scan)
+    db.commit()
+
+    return {
+        "deleted": True,
+        "scan_id": scan_id,
+        "scan_number": scan_number,
+        "review_entries_removed": deleted_reviews,
+    }
