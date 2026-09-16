@@ -15,6 +15,24 @@ export const api = {
     return res.json();
   },
 
+  async getAssistantStatus(): Promise<{ enabled: boolean; model: string; name: string }> {
+    const res = await fetch(`${API_BASE}/assistant/status`);
+    if (!res.ok) throw new Error('Assistant status check failed');
+    return res.json();
+  },
+
+  async askAssistant(
+    messages: { role: 'user' | 'assistant'; content: string }[],
+  ): Promise<{ reply: string; handled_locally: boolean }> {
+    const res = await fetch(`${API_BASE}/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+    if (!res.ok) throw new Error('Assistant request failed');
+    return res.json();
+  },
+
   async getRules(): Promise<LegalRuleSet> {
     const res = await fetch(`${API_BASE}/rules`);
     if (!res.ok) throw new Error('Failed to fetch legal rules');

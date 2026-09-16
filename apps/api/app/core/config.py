@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # engine. Must stay False in production: fabricated text is never acceptable.
     OCR_ALLOW_MOCK_FALLBACK: bool = False
 
+    # Pia, the in-product assistant. Optional: when GROQ_API_KEY is empty the
+    # assistant widget reports itself as unconfigured and nothing else changes.
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
     model_config = {
         "env_file": ".env",
         "extra": "ignore"

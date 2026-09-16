@@ -7,6 +7,7 @@ import { HistoryView } from './pages/HistoryView';
 import { ScanDetailView } from './pages/ScanDetailView';
 import { api } from './services/api';
 import { ThemeProvider } from './theme/ThemeProvider';
+import { PiaAssistant } from './components/PiaAssistant';
 
 const AppShell: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -118,6 +119,8 @@ const AppShell: React.FC = () => {
           </p>
         </div>
       </footer>
+
+      <PiaAssistant />
     </div>
   );
 };
