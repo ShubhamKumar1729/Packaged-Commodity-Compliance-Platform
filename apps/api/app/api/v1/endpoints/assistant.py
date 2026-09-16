@@ -18,16 +18,20 @@ OCR/VLM or rule-evaluation pipelines.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from functools import lru_cache
 from typing import List, Literal, Optional
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.config import REPO_ROOT, settings
+from app.core.database import get_db
+from app.models.scan import Scan
 from services.compliance.registry import rule_registry
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,9 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(min_length=1)
+    # When the user is viewing an inspection, the UI passes its id so Pia can
+    # answer about that specific record instead of talking in generalities.
+    scan_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -146,6 +153,154 @@ REFUSAL = (
 )
 
 
+# ------------------------------------------------------- scan context
+
+# Status labels as they appear in the interface, so Pia's wording matches what
+# the user is looking at rather than the raw database values.
+_PCR_STATUS_LABEL = {
+    "PASS": "Compliant",
+    "FAIL": "Violation",
+    "REVIEW_REQUIRED": "Needs verification",
+    "NOT_APPLICABLE": "Not applicable",
+}
+_FSSR_STATUS_LABEL = {
+    "compliant": "Compliant",
+    "violation": "Violation",
+    "unable_to_verify": "Needs verification",
+}
+
+
+def build_scan_context(scan: Scan) -> str:
+    """
+    Render one stored inspection as plain text for the model.
+
+    Everything here is read from the saved record. Nothing is inferred or
+    recomputed, so Pia can only repeat findings the rule engine already made.
+    """
+    lines: List[str] = []
+    add = lines.append
+
+    add("THE INSPECTION THE USER IS CURRENTLY VIEWING")
+    add(f"Reference: {scan.scan_number}")
+    add(f"Commodity type: {scan.commodity_type}")
+    add(f"Stage: {scan.status}")
+    add(f"Ruleset: {scan.ruleset_version}")
+    if scan.created_at:
+        add(f"Scanned: {scan.created_at.isoformat()}")
+
+    verdict_label = _PCR_STATUS_LABEL.get(scan.overall_verdict or "", scan.overall_verdict)
+    if scan.overall_verdict:
+        add(f"Overall verdict: {scan.overall_verdict} ({verdict_label})")
+    if scan.compliance_score is not None:
+        add(f"Compliance score: {scan.compliance_score}%")
+
+    def _load(raw, default):
+        if not raw:
+            return default
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return default
+
+    summary = _load(scan.summary_json, None)
+    if isinstance(summary, dict):
+        add(
+            "Totals: "
+            f"{summary.get('total_checks', '?')} checks, "
+            f"{summary.get('pass_count', 0)} compliant, "
+            f"{summary.get('fail_count', 0)} violations, "
+            f"{summary.get('review_count', 0)} need verification, "
+            f"{summary.get('not_applicable_count', 0)} not applicable"
+        )
+
+    # Which engine produced the text. Pia must not present simulated output
+    # as a real inspection.
+    evidence = _load(scan.evidence_json, None)
+    if isinstance(evidence, dict):
+        ocr_ev = evidence.get("ocr") or {}
+        provider = ocr_ev.get("provider")
+        if provider:
+            add(f"OCR engine used: {provider}")
+            if str(provider).lower() == "mock":
+                add(
+                    "  WARNING: this is the MOCK engine. The text below is fixed "
+                    "sample data and does NOT describe the user's package. Say so "
+                    "clearly if asked about the product details."
+                )
+        if ocr_ev.get("token_count") is not None:
+            add(f"OCR tokens read: {ocr_ev.get('token_count')}")
+        if ocr_ev.get("mean_confidence") is not None:
+            add(f"OCR mean confidence: {ocr_ev.get('mean_confidence')}")
+        vlm_ev = evidence.get("vlm") or {}
+        if vlm_ev.get("observations"):
+            add(f"Visual checks performed: {', '.join(map(str, vlm_ev['observations']))}")
+
+    # Extracted declarations, skipping empty and internal diagnostic fields.
+    facts = _load(scan.facts_json, None)
+    if isinstance(facts, dict):
+        skip = {"raw_field_map"}
+
+        def _render_fact(value):
+            # Extracted fields are stored as {raw_value, normalized_value,
+            # confidence, source, bbox}. Only the human-meaningful parts are
+            # worth spending context on.
+            if isinstance(value, dict) and "raw_value" in value:
+                raw = value.get("raw_value")
+                norm = value.get("normalized_value")
+                conf = value.get("confidence")
+                text = f"{raw}"
+                if norm not in (None, "", raw) and not isinstance(norm, dict):
+                    text += f" (normalised: {norm})"
+                if conf is not None:
+                    text += f" [confidence {conf}]"
+                return text
+            return value
+
+        shown = [
+            f"  - {k}: {_render_fact(v)}"
+            for k, v in facts.items()
+            if k not in skip and v not in (None, "", [], {})
+        ]
+        if shown:
+            add("")
+            add("Declarations extracted from the label:")
+            lines.extend(shown)
+
+    findings = _load(scan.findings_json, [])
+    if isinstance(findings, list) and findings:
+        add("")
+        add("PCR 2011 rule findings (authoritative - do not re-judge these):")
+        for f in findings:
+            if not isinstance(f, dict):
+                continue
+            status = f.get("status", "")
+            label = _PCR_STATUS_LABEL.get(status, status)
+            add(f"  - {f.get('source_rule', '')} {f.get('title', '')}: {status} ({label})")
+            if f.get("detected"):
+                add(f"      detected: {f['detected']}")
+            if f.get("reasoning"):
+                add(f"      reason: {f['reasoning']}")
+            if f.get("confidence") is not None:
+                add(f"      confidence: {f['confidence']}")
+
+    fssr = _load(scan.fssr_findings_json, [])
+    if isinstance(fssr, list) and fssr:
+        add("")
+        add("FSSR 2020 ingredient/labelling findings:")
+        for f in fssr:
+            if not isinstance(f, dict):
+                continue
+            status = f.get("status", "")
+            label = _FSSR_STATUS_LABEL.get(status, status)
+            add(f"  - {f.get('source_rule', '')} {f.get('title', '')}: {status} ({label})")
+            if f.get("extracted_value"):
+                add(f"      detected: {f['extracted_value']}")
+            if f.get("explanation"):
+                add(f"      reason: {f['explanation']}")
+
+    return "\n".join(lines)
+
+
 # ------------------------------------------------------------ system prompt
 
 @lru_cache(maxsize=1)
@@ -223,9 +378,19 @@ STYLE:
   - Plain language for inspectors, not engineers. No raw stack traces, file
     paths, environment variables or code unless the user explicitly asks.
   - Cite the rule number (for example "Rule 6(1)(e)") when it is relevant.
-  - Never invent a scan result, score, statistic or rule that is not real. If
-    you do not know something about the user's specific scan, say so and tell
-    them where in the interface to look.
+  - Never invent a scan result, score, statistic or rule that is not real.
+
+USING INSPECTION CONTEXT:
+  - If a section titled "THE INSPECTION THE USER IS CURRENTLY VIEWING" appears
+    below, it is the real stored record. Answer from it directly and concretely
+    - quote the actual verdict, score, rule findings and detected values.
+  - Treat those findings as already decided by the rule engine. Report them;
+    never re-judge a rule or contradict a recorded status.
+  - If the context says the MOCK OCR engine was used, state plainly that the
+    product details are simulated sample data and do not describe their package.
+  - If a detail genuinely is not in the context, say it is not recorded rather
+    than guessing, and point to where in the interface it would appear.
+  - With no inspection context, answer generally and suggest opening the scan.
 """
 
 
@@ -249,7 +414,7 @@ def assistant_status():
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest) -> ChatResponse:
+async def chat(payload: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
     if not settings.GROQ_API_KEY:
         return ChatResponse(
             reply=(
@@ -265,9 +430,17 @@ async def chat(payload: ChatRequest) -> ChatResponse:
 
     history = payload.messages[-MAX_HISTORY_MESSAGES:]
     model = settings.GROQ_MODEL
+
+    # Ground the answer in the record the user is looking at, when there is one.
+    system_prompt = build_system_prompt()
+    if payload.scan_id:
+        scan = db.query(Scan).filter(Scan.id == payload.scan_id).first()
+        if scan:
+            system_prompt = f"{system_prompt}\n\n{build_scan_context(scan)}"
+
     body = {
         "model": model,
-        "messages": [{"role": "system", "content": build_system_prompt()}]
+        "messages": [{"role": "system", "content": system_prompt}]
                     + [{"role": m.role, "content": m.content} for m in history],
         "temperature": 0.3,
         # max_completion_tokens is the current field name and is required by

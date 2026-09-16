@@ -23,11 +23,12 @@ export const api = {
 
   async askAssistant(
     messages: { role: 'user' | 'assistant'; content: string }[],
+    scanId?: string | null,
   ): Promise<{ reply: string; handled_locally: boolean }> {
     const res = await fetch(`${API_BASE}/assistant/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, scan_id: scanId ?? null }),
     });
     if (!res.ok) throw new Error('Assistant request failed');
     return res.json();

@@ -120,7 +120,7 @@ const AppShell: React.FC = () => {
         </div>
       </footer>
 
-      <PiaAssistant />
+      <PiaAssistant scanId={selectedScanId} />
     </div>
   );
 };

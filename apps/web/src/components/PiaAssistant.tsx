@@ -22,16 +22,35 @@ const GREETING: Msg = {
     "Hi, I'm Pia. I can help you scan a package, understand a compliance result, or explain any PCR 2011 or FSSR 2020 rule. What would you like to know?",
 };
 
+const SCAN_GREETING: Msg = {
+  role: 'assistant',
+  content:
+    "Hi, I'm Pia. I can see the inspection you're viewing — ask me about its verdict, why a rule failed, or what to fix first.",
+};
+
 const SUGGESTIONS = [
   'How do I scan a package?',
   'What does "Needs verification" mean?',
   'Explain Rule 6(1)(e)',
 ];
 
-export const PiaAssistant: React.FC = () => {
+// Shown when an inspection is open, so the obvious questions are one tap away.
+const SCAN_SUGGESTIONS = [
+  'Tell me about this inspection',
+  'Why is it not compliant?',
+  'What should I fix first?',
+];
+
+interface PiaAssistantProps {
+  /** The inspection currently on screen, so Pia can answer about it. */
+  scanId?: string | null;
+}
+
+export const PiaAssistant: React.FC<PiaAssistantProps> = ({ scanId }) => {
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([GREETING]);
+  const greeting = scanId ? SCAN_GREETING : GREETING;
+  const [messages, setMessages] = useState<Msg[]>([greeting]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -58,6 +77,14 @@ export const PiaAssistant: React.FC = () => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  // Swap the opening line when the user moves between an inspection and the
+  // rest of the app, but only while the transcript is still untouched.
+  useEffect(() => {
+    setMessages((prev) =>
+      prev.length === 1 && prev[0].role === 'assistant' ? [greeting] : prev,
+    );
+  }, [greeting]);
+
   // Close on Escape, returning focus to the launcher.
   useEffect(() => {
     if (!open) return;
@@ -83,9 +110,9 @@ export const PiaAssistant: React.FC = () => {
     try {
       // Drop the local greeting: it is UI text, not conversation history.
       const history = next
-        .filter((m) => m !== GREETING)
+        .filter((m) => m !== GREETING && m !== SCAN_GREETING)
         .map(({ role, content }) => ({ role, content }));
-      const res = await api.askAssistant(history);
+      const res = await api.askAssistant(history, scanId);
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
     } catch {
       setMessages((prev) => [
@@ -185,7 +212,7 @@ export const PiaAssistant: React.FC = () => {
 
             {messages.length === 1 && !sending && (
               <div className="pt-1 space-y-1.5">
-                {SUGGESTIONS.map((s) => (
+                {(scanId ? SCAN_SUGGESTIONS : SUGGESTIONS).map((s) => (
                   <button
                     key={s}
                     type="button"
