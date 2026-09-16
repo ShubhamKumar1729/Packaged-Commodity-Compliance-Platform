@@ -85,7 +85,10 @@ def main() -> int:
             json={
                 "model": model,
                 "messages": [{"role": "user", "content": "Reply with exactly: PIA OK"}],
-                "max_tokens": 20,
+                # Reasoning models spend part of this budget thinking, so keep
+                # it well above the length of the expected reply.
+                "max_completion_tokens": 512,
+                **({"reasoning_effort": "low"} if "gpt-oss" in model else {}),
             },
             timeout=30.0,
         )
@@ -98,7 +101,14 @@ def main() -> int:
         print(chat.text[:400])
         return 1
 
-    reply = chat.json()["choices"][0]["message"]["content"].strip()
+    choice = chat.json()["choices"][0]
+    reply = (choice["message"].get("content") or "").strip()
+    if not reply:
+        print(f"[WARN] Model returned empty content "
+              f"(finish_reason={choice.get('finish_reason')}).")
+        print("       The reply budget was spent on reasoning. Pia handles this,")
+        print("       but consider openai/gpt-oss-20b for short help answers.")
+        return 1
     print(f"[OK]   Model replied: {reply!r}")
     print("\nVERDICT: Pia's Groq connection is working.")
     print("If the widget still errors, restart the API server so it reloads .env.")

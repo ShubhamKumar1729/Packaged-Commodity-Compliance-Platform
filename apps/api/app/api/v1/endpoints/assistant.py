@@ -239,13 +239,22 @@ async def chat(payload: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=REFUSAL, handled_locally=True)
 
     history = payload.messages[-MAX_HISTORY_MESSAGES:]
+    model = settings.GROQ_MODEL
     body = {
-        "model": settings.GROQ_MODEL,
+        "model": model,
         "messages": [{"role": "system", "content": build_system_prompt()}]
                     + [{"role": m.role, "content": m.content} for m in history],
         "temperature": 0.3,
-        "max_tokens": 600,
+        # max_completion_tokens is the current field name and is required by
+        # the reasoning models; max_tokens is the deprecated alias.
+        "max_completion_tokens": 1200,
     }
+
+    # GPT-OSS models reason before answering, and those reasoning tokens are
+    # drawn from the same budget as the reply. Keep the effort low so a short
+    # help answer is not truncated, and keep the reasoning out of the reply.
+    if "gpt-oss" in model:
+        body["reasoning_effort"] = "low"
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -316,7 +325,9 @@ async def chat(payload: ChatRequest) -> ChatResponse:
         )
 
     try:
-        reply = res.json()["choices"][0]["message"]["content"].strip()
+        choice = res.json()["choices"][0]
+        reply = (choice["message"].get("content") or "").strip()
+        finish = choice.get("finish_reason")
     except (KeyError, IndexError, ValueError) as exc:
         logger.warning("Unexpected Groq response shape: %s", exc)
         return ChatResponse(
@@ -324,4 +335,16 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             handled_locally=True,
         )
 
-    return ChatResponse(reply=reply or REFUSAL)
+    if not reply:
+        # A reasoning model can spend the whole budget thinking and return no
+        # visible answer. Say so plainly rather than showing an empty bubble.
+        logger.warning("Empty content from %s (finish_reason=%s)", model, finish)
+        return ChatResponse(
+            reply=(
+                "I ran out of room before finishing that thought. "
+                "Could you ask me something a little more specific?"
+            ),
+            handled_locally=True,
+        )
+
+    return ChatResponse(reply=reply)
